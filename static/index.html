@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Rental DSS - AI Powered</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="logo">
+                <h2>Urban<span class="highlight">Move</span></h2>
+            </div>
+            <nav>
+                <a href="#" class="nav-item active" onclick="showSection('dashboard')">
+                    <span class="icon">📊</span> Dashboard
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('map-view')">
+                    <span class="icon">🗺️</span> Map Explore
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('predict')">
+                    <span class="icon">🤖</span> Rent Predictor
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="view-section active">
+                <header>
+                    <h1>City Overview</h1>
+                    <p class="subtitle">AI-Driven Insights for Urban Rentals</p>
+                </header>
+
+                <div class="stats-grid">
+                    <div class="stat-card glass">
+                        <h3>Avg Rent</h3>
+                        <div class="value" id="avg-rent-stat">Loading...</div>
+                        <div class="stat-subtitle" id="rent-range-stat"></div>
+                    </div>
+                    <div class="stat-card glass">
+                        <h3>Total Listings</h3>
+                        <div class="value" id="total-listings-stat">Loading...</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <h3>Cities</h3>
+                        <div class="value" id="cities-count-stat">Loading...</div>
+                    </div>
+                    <div class="stat-card glass">
+                        <h3>Median Rent</h3>
+                        <div class="value" id="med-rent-stat">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-box glass">
+                        <h3>Rent Distribution by City</h3>
+                        <canvas id="cityChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Map Section -->
+            <section id="map-view" class="view-section">
+                <header>
+                    <h1>Spatial Analysis</h1>
+                    <p class="subtitle">Clustering & Affordability Heatmap</p>
+                    <p class="subtitle" style="font-size: 0.85rem; margin-top: 0.25rem;">
+                        Tip: Click anywhere on the map or on a marker to open that exact location in Google Maps.
+                    </p>
+                </header>
+                <div class="map-container glass">
+                    <div id="map"></div>
+                </div>
+            </section>
+
+            <!-- Prediction Section -->
+            <section id="predict" class="view-section">
+                <header>
+                    <h1>AI Rent Estimator</h1>
+                    <p class="subtitle">Predict fair market rent using Random Forest</p>
+                </header>
+                <div class="predict-layout">
+                    <div class="form-container glass">
+                        <form id="predict-form">
+                            <div class="form-group">
+                                <label>City</label>
+                                <select id="city" name="city" required>
+                                    <option value="Mumbai">Mumbai</option>
+                                    <option value="Bangalore">Bangalore</option>
+                                    <option value="Delhi">Delhi</option>
+                                    <option value="Kolkata">Kolkata</option>
+                                    <option value="Chennai">Chennai</option>
+                                    <option value="Hyderabad">Hyderabad</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Area Locality (Optional)</label>
+                                <input type="text" id="locality" name="locality" placeholder="e.g., Bandra, Andheri">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>BHK</label>
+                                    <input type="number" id="bhk" name="bhk" value="2" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Size (sqft)</label>
+                                    <input type="number" id="size" name="size" value="850" min="100" required>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Bathrooms</label>
+                                    <input type="number" id="bathroom" name="bathroom" value="2" min="1" required>
+                                </div>
+                                <div class="form-group">
+                                    <label>Area Type</label>
+                                    <select id="area_type" name="area_type" required>
+                                        <option value="Super Area">Super Area</option>
+                                        <option value="Carpet Area">Carpet Area</option>
+                                        <option value="Built Area">Built Area</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Furnishing</label>
+                                    <select id="furnishing" name="furnishing" required>
+                                        <option value="Semi-Furnished">Semi-Furnished</option>
+                                        <option value="Unfurnished">Unfurnished</option>
+                                        <option value="Furnished">Furnished</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Tenant Preferred</label>
+                                    <select id="tenant" name="tenant" required>
+                                        <option value="Bachelors/Family">Bachelors/Family</option>
+                                        <option value="Bachelors">Bachelors</option>
+                                        <option value="Family">Family</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Bathroom Type</label>
+                                <select id="bathroom_type" name="bathroom_type" required>
+                                    <option value="Standard">Standard</option>
+                                    <option value="Attached">Attached</option>
+                                    <option value="Common">Common</option>
+                                    <option value="En-suite">En-suite</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-primary">Predict Rent</button>
+                        </form>
+                    </div>
+                    <div class="result-panel">
+                        <div class="result-container glass" id="result-box" style="display:none;">
+                            <h3>Estimated Rent</h3>
+                            <div class="price" id="prediction-result">₹0</div>
+                            <p class="disclaimer">Based on historical market data.</p>
+                        </div>
+                        <div class="recommendations-container glass" id="recommendations-box" style="display:none;">
+                            <div class="recommendations-header">
+                                <h3>Suggested Locations</h3>
+                                <p class="subtitle small">Based on your preferences and predicted rent.</p>
+                            </div>
+                            <div id="recommendations-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>

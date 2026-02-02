@@ -1,0 +1,43 @@
+{
+    "total_listings": 4746,
+    "avg_rent": 34993.45132743363,
+    "med_rent": 16000.0,
+    "min_rent": 1200.0,
+    "max_rent": 3500000.0,
+    "std_rent": 78106.4129373483,
+    "cities": [
+        "Bangalore",
+        "Chennai",
+        "Delhi",
+        "Hyderabad",
+        "Kolkata",
+        "Mumbai"
+    ],
+    "rent_by_city": {
+        "Bangalore": 24966.365688487585,
+        "Chennai": 21614.092031425364,
+        "Delhi": 29461.98347107438,
+        "Hyderabad": 20555.048387096773,
+        "Kolkata": 11645.173664122138,
+        "Mumbai": 85321.20473251029
+    },
+    "rent_by_bhk": {
+        "1": 14139.223650385604,
+        "2": 22113.864017660046,
+        "3": 55863.06284153005,
+        "4": 168864.55555555556,
+        "5": 297500.0,
+        "6": 73125.0
+    },
+    "rent_by_furnishing": {
+        "Furnished": 56110.30588235294,
+        "Semi-Furnished": 38718.81075077743,
+        "Unfurnished": 22461.635812672175
+    },
+    "rent_by_area_type": {
+        "Built Area": 10500.0,
+        "Carpet Area": 52385.897302001744,
+        "Super Area": 18673.39656582175
+    },
+    "total_cities": 6
+}
