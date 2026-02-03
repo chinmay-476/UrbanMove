@@ -8,7 +8,7 @@ Copy each slide block into PowerPoint or Google Slides. Use slide titles as head
 
 **Urban Rental Decision Support System**
 
-- AI-Powered Rent Estimation & Neighborhood Analysis
+- Data-Driven Rent Estimation & Neighborhood Analysis
 - [Your name]
 - [Course / 6th Semester]
 - [Date]
@@ -97,7 +97,7 @@ Copy each slide block into PowerPoint or Google Slides. Use slide titles as head
 - Premium/Dark theme with glassmorphism cards
 - Chart.js: Rent Distribution by City
 - Stat cards: Avg Rent, Total Listings, Cities, Median Rent
-- AI-driven insights for urban rentals
+- Data-driven insights for urban rentals
 
 ---
 

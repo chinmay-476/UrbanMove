@@ -52,8 +52,9 @@ async function loadStats() {
     try {
         const res = await fetch('/api/stats');
         const data = await res.json();
-
-        document.getElementById('avg-rent-stat').textContent = `₹${Math.round(data.avg_rent).toLocaleString()}`;
+        const avgRentEl = document.getElementById('avg-rent-stat');
+        const overallAvgRent = Math.round(data.avg_rent);
+        avgRentEl.textContent = `Rs ${overallAvgRent.toLocaleString()}`;
         document.getElementById('total-listings-stat').textContent = data.total_listings.toLocaleString();
         document.getElementById('cities-count-stat').textContent = data.total_cities || data.cities.length;
         
@@ -105,18 +106,36 @@ async function loadStats() {
                     responsive: true,
                     maintainAspectRatio: true,
                     aspectRatio: 2,
+                    onHover: (_event, activeEls) => {
+                        if (!avgRentEl) return;
+                        if (!activeEls || activeEls.length === 0) {
+                            avgRentEl.textContent = `Rs ${overallAvgRent.toLocaleString()}`;
+                            return;
+                        }
+                        const point = activeEls[0];
+                        const city = chartLabels[point.index];
+                        const rent = chartData[point.index];
+                        if (city && typeof rent === 'number') {
+                            avgRentEl.textContent = `${city}: Rs ${Math.round(rent).toLocaleString()}`;
+                        }
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
                     layout: {
                         padding: {
                             top: 10,
                             bottom: 10,
                             left: 10,
-                            right: 10
+                            right: 18
                         }
                     },
                     plugins: {
                         legend: { display: false },
                         tooltip: { 
                             callbacks: { 
+                                title: (items) => items?.[0]?.label || '',
                                 label: (c) => `Avg Rent: ₹${Math.round(c.raw).toLocaleString()}` 
                             },
                             backgroundColor: 'rgba(30, 41, 59, 0.95)',

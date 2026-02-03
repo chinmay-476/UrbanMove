@@ -7,7 +7,7 @@ Short notes for what to say on each slide. Adjust timing to your audience (e.g.,
 ## Slide 1: Title
 
 - Introduce the project name and subtitle.
-- Optionally: "This is my 6th semester project on an AI-powered system to help people make better rental decisions in cities."
+- Optionally: "This is my 6th semester project on a data-driven system to help people make better rental decisions in cities."
 
 ---
 
