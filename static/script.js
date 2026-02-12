@@ -4,11 +4,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initForm();
     loadCities();
     initTrendForecastControls();
+    initFeaturePages();
 });
 
 let latestPredictionInput = null;
 let latestPredictedRent = null;
 let trendForecastChart = null;
+let trendsPageChart = null;
 
 // Load cities and localities dynamically
 async function loadCities() {
@@ -30,6 +32,16 @@ async function loadCities() {
                 citySelect.appendChild(option);
             });
         }
+
+        // Prefill city text inputs across feature pages for convenience.
+        const defaultCity = (data.cities && data.cities.length > 0) ? data.cities[0] : 'Mumbai';
+        ['trnd-city', 'score-city', 'alert-city', 'sim-city', 'anom-city', 'comm-city', 'comm-work-city']
+            .forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && !el.value) {
+                    el.value = defaultCity;
+                }
+            });
         
         // Update locality input with autocomplete suggestions (optional enhancement)
         // For now, we'll just store the data for potential future use
@@ -45,7 +57,9 @@ function showSection(id) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
     document.getElementById(id).classList.add('active');
-    event.currentTarget.classList.add('active');
+    if (typeof event !== 'undefined' && event && event.currentTarget) {
+        event.currentTarget.classList.add('active');
+    }
 
     if (id === 'map-view') {
         setTimeout(() => map.invalidateSize(), 100);
@@ -399,6 +413,7 @@ function initForm() {
             const result = await res.json();
             const resultBox = document.getElementById('result-box');
             const predictionEl = document.getElementById('prediction-result');
+            const labConfidence = document.getElementById('lab-confidence');
 
             resultBox.style.display = 'flex';
             predictionEl.textContent = formatCurrency(result.predicted_rent);
@@ -408,6 +423,10 @@ function initForm() {
                 if (disclaimer) {
                     disclaimer.textContent = `Based on historical market data for ${result.location.city}${result.location.locality ? ` - ${result.location.locality}` : ''}`;
                 }
+            }
+
+            if (labConfidence && result.confidence_range) {
+                labConfidence.textContent = `Confidence range: ${formatCurrency(result.confidence_range.low)} - ${formatCurrency(result.confidence_range.high)} (expected ${formatCurrency(result.confidence_range.expected)})`;
             }
 
             if (result.predicted_rent) {
@@ -807,5 +826,407 @@ async function loadRentTrendForecast(formInput, predictedRent) {
         box.style.display = 'block';
     } catch (err) {
         console.error('Error loading rent trend forecast:', err);
+    }
+}
+
+function initFeaturePages() {
+    const bindClick = (id, handler) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', handler);
+    };
+
+    bindClick('trnd-load-btn', () => loadTrendsPage());
+    bindClick('compare-load-btn', () => loadCompareListings());
+    bindClick('score-load-btn', () => loadLocalityScorecard());
+    bindClick('alert-create-btn', () => createAlert());
+    bindClick('alert-check-btn', () => checkAlerts());
+    bindClick('sim-load-btn', () => loadSimilarHomes(false));
+    bindClick('sim-use-last-btn', () => loadSimilarHomes(true));
+    bindClick('anom-load-btn', () => loadPriceIntelligencePage());
+    bindClick('comm-load-btn', () => loadCommuteAdvisorPage());
+    bindClick('lab-whatif-btn', () => runLabWhatIf());
+    bindClick('lab-explain-btn', () => runLabExplain());
+    bindClick('lab-monitor-btn', () => runLabMonitoring());
+    bindClick('lab-retrain-btn', () => runLabRetrain());
+
+    refreshAlerts();
+}
+
+function safeText(value) {
+    return value === null || value === undefined ? '' : String(value);
+}
+
+async function loadTrendsPage() {
+    const city = safeText(document.getElementById('trnd-city')?.value).trim();
+    const bhk = parseInt(document.getElementById('trnd-bhk')?.value || '2', 10);
+    const locality = safeText(document.getElementById('trnd-locality')?.value).trim();
+    const horizon = parseInt(document.getElementById('trnd-horizon')?.value || '6', 10);
+    const summary = document.getElementById('trnd-summary');
+    const canvas = document.getElementById('trndChart');
+    if (!summary || !canvas) return;
+
+    summary.textContent = 'Loading trend forecast...';
+    try {
+        const params = new URLSearchParams({
+            city,
+            bhk: String(Number.isFinite(bhk) ? bhk : 2),
+            locality,
+            months_history: '12',
+            months_forecast: String(Number.isFinite(horizon) ? horizon : 6)
+        });
+        const res = await fetch(`/api/rent_trends?${params.toString()}`);
+        if (!res.ok) throw new Error('Failed to load trend data');
+        const data = await res.json();
+        const historical = data.historical || [];
+        const forecast = data.forecast || [];
+        if (historical.length === 0) {
+            summary.textContent = 'No trend data available for selected filters.';
+            return;
+        }
+
+        const labels = historical.map((x) => x.month).concat(forecast.map((x) => x.month));
+        const histSeries = historical.map((x) => x.median_rent).concat(new Array(forecast.length).fill(null));
+        const forecastSeries = new Array(labels.length).fill(null);
+        forecastSeries[historical.length - 1] = historical[historical.length - 1].median_rent;
+        forecast.forEach((x, idx) => {
+            forecastSeries[historical.length + idx] = x.forecast_rent;
+        });
+
+        if (trendsPageChart) trendsPageChart.destroy();
+        trendsPageChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Historical Median',
+                        data: histSeries,
+                        borderColor: '#22c55e',
+                        borderWidth: 2,
+                        tension: 0.28,
+                        pointRadius: 2
+                    },
+                    {
+                        label: 'Forecast',
+                        data: forecastSeries,
+                        borderColor: '#f59e0b',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        tension: 0.2,
+                        pointRadius: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1' } }
+                },
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(148,163,184,0.15)' } },
+                    y: {
+                        ticks: { color: '#94a3b8', callback: (val) => `Rs ${Math.round(val / 1000)}k` },
+                        grid: { color: 'rgba(148,163,184,0.15)' }
+                    }
+                }
+            }
+        });
+
+        summary.textContent = `Trend ${data.trend_direction || 'stable'} | Next month forecast ${formatCurrency(data.next_month_forecast || 0)} | Samples ${data.market_size || 0}`;
+    } catch (err) {
+        summary.textContent = `Error: ${err.message}`;
+    }
+}
+
+async function loadCompareListings() {
+    const ids = safeText(document.getElementById('compare-ids')?.value).trim();
+    const summary = document.getElementById('compare-summary');
+    const result = document.getElementById('compare-result');
+    if (!summary || !result) return;
+    summary.textContent = 'Loading comparison...';
+    result.innerHTML = '';
+    try {
+        const res = await fetch(`/api/compare_listings?ids=${encodeURIComponent(ids)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Compare failed');
+        const rows = data.comparisons || [];
+        const s = data.summary || {};
+        summary.textContent = `Compared ${s.count || rows.length} listings | Rent range: ${formatCurrency(s.min_rent || 0)} - ${formatCurrency(s.max_rent || 0)}`;
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>#${r.id}</strong> ${safeText(r['Area Locality'])}, ${safeText(r.City)} | Rent ${formatCurrency(r.Rent)} | ${safeText(r.BHK)} BHK | ${safeText(r.Size)} sqft</div>`
+        )).join('');
+    } catch (err) {
+        summary.textContent = `Error: ${err.message}`;
+    }
+}
+
+async function loadLocalityScorecard() {
+    const city = safeText(document.getElementById('score-city')?.value).trim();
+    const bhk = parseInt(document.getElementById('score-bhk')?.value || '2', 10);
+    const result = document.getElementById('score-result');
+    if (!result) return;
+    result.innerHTML = 'Loading scorecard...';
+    try {
+        const params = new URLSearchParams({ city, bhk: String(Number.isFinite(bhk) ? bhk : 2), limit: '15' });
+        const res = await fetch(`/api/locality_scorecard?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Scorecard failed');
+        const rows = data.scorecard || [];
+        if (rows.length === 0) {
+            result.innerHTML = 'No localities found for the selected filters.';
+            return;
+        }
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>#${r.rank} ${safeText(r.locality)}</strong> (${safeText(r.city)}) | Score ${r.locality_score}% | Avg ${formatCurrency(r.avg_rent)} | Livability ${r.livability}/10 | Listings ${r.listings}</div>`
+        )).join('');
+    } catch (err) {
+        result.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function refreshAlerts() {
+    const listEl = document.getElementById('alerts-list');
+    if (!listEl) return;
+    try {
+        const res = await fetch('/api/alerts');
+        const data = await res.json();
+        const alerts = data.alerts || [];
+        if (alerts.length === 0) {
+            listEl.innerHTML = 'No alerts saved.';
+            return;
+        }
+        listEl.innerHTML = alerts.map((a) => (
+            `<div class="mini-card"><strong>${safeText(a.name)}</strong> | ${safeText(a.city)} | BHK ${safeText(a.bhk ?? 'Any')} | Budget ${formatCurrency(a.budget)}</div>`
+        )).join('');
+    } catch (err) {
+        listEl.innerHTML = `Error loading alerts: ${err.message}`;
+    }
+}
+
+async function createAlert() {
+    const payload = {
+        name: safeText(document.getElementById('alert-name')?.value).trim() || undefined,
+        city: safeText(document.getElementById('alert-city')?.value).trim(),
+        bhk: parseInt(document.getElementById('alert-bhk')?.value || '2', 10),
+        budget: parseFloat(document.getElementById('alert-budget')?.value || '0')
+    };
+    const result = document.getElementById('alerts-check-result');
+    if (!result) return;
+    try {
+        const res = await fetch('/api/alerts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Create alert failed');
+        result.innerHTML = `Alert saved: ${safeText(data.alert?.name || '')}`;
+        await refreshAlerts();
+    } catch (err) {
+        result.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function checkAlerts() {
+    const result = document.getElementById('alerts-check-result');
+    if (!result) return;
+    result.innerHTML = 'Checking alerts...';
+    try {
+        const res = await fetch('/api/alerts/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Alert check failed');
+        const rows = data.results || [];
+        if (rows.length === 0) {
+            result.innerHTML = 'No active alerts to check.';
+            return;
+        }
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>${safeText(r.name)}</strong> | Matches ${r.matches}</div>`
+        )).join('');
+    } catch (err) {
+        result.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function loadSimilarHomes(useLatest) {
+    const result = document.getElementById('sim-result');
+    if (!result) return;
+    result.innerHTML = 'Loading similar homes...';
+    try {
+        let payload;
+        if (useLatest && latestPredictionInput) {
+            payload = { ...latestPredictionInput, limit: 5 };
+        } else {
+            payload = {
+                city: safeText(document.getElementById('sim-city')?.value).trim(),
+                bhk: parseInt(document.getElementById('sim-bhk')?.value || '2', 10),
+                size: parseFloat(document.getElementById('sim-size')?.value || '850'),
+                bathroom: parseInt(document.getElementById('sim-bath')?.value || '2', 10),
+                furnishing: 'Semi-Furnished',
+                area_type: 'Super Area',
+                tenant: 'Bachelors/Family',
+                limit: 5
+            };
+        }
+        const res = await fetch('/api/similar_listings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Similar homes failed');
+        const rows = data.similar || [];
+        if (rows.length === 0) {
+            result.innerHTML = 'No similar homes found.';
+            return;
+        }
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>#${r.rank} ${safeText(r.locality)}</strong> (${safeText(r.city)}) | Match ${r.match_score}% | Rent ${formatCurrency(r.rent)} | ${r.bhk} BHK | ${r.size} sqft</div>`
+        )).join('');
+    } catch (err) {
+        result.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function loadPriceIntelligencePage() {
+    const city = safeText(document.getElementById('anom-city')?.value).trim();
+    const bhk = parseInt(document.getElementById('anom-bhk')?.value || '2', 10);
+    const limit = parseInt(document.getElementById('anom-limit')?.value || '50', 10);
+    const summary = document.getElementById('anom-summary');
+    const result = document.getElementById('anom-result');
+    if (!summary || !result) return;
+    summary.textContent = 'Loading anomaly analysis...';
+    result.innerHTML = '';
+    try {
+        const params = new URLSearchParams({
+            city,
+            bhk: String(Number.isFinite(bhk) ? bhk : 2),
+            limit: String(Number.isFinite(limit) ? limit : 50)
+        });
+        const res = await fetch(`/api/price_intelligence?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Price intelligence failed');
+        const s = data.summary || {};
+        summary.textContent = `Underpriced ${s.underpriced || 0} | Fair ${s.fair || 0} | Overpriced ${s.overpriced || 0}`;
+        const rows = (data.records || []).slice(0, 20);
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>${safeText(r.tag)}</strong> | ${safeText(r.locality)}, ${safeText(r.city)} | Actual ${formatCurrency(r.rent)} | Pred ${formatCurrency(r.predicted_rent)} | Gap ${r.residual_pct}%</div>`
+        )).join('');
+    } catch (err) {
+        summary.textContent = `Error: ${err.message}`;
+    }
+}
+
+async function loadCommuteAdvisorPage() {
+    const city = safeText(document.getElementById('comm-city')?.value).trim();
+    const workCity = safeText(document.getElementById('comm-work-city')?.value).trim();
+    const bhk = parseInt(document.getElementById('comm-bhk')?.value || '2', 10);
+    const budget = parseFloat(document.getElementById('comm-budget')?.value || '35000');
+    const result = document.getElementById('comm-result');
+    if (!result) return;
+    result.innerHTML = 'Loading commute advisor...';
+    try {
+        const params = new URLSearchParams({
+            city,
+            work_city: workCity,
+            bhk: String(Number.isFinite(bhk) ? bhk : 2),
+            budget: String(Number.isFinite(budget) ? budget : 35000),
+            limit: '8'
+        });
+        const res = await fetch(`/api/commute_advisor?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Commute advisor failed');
+        const rows = data.recommendations || [];
+        if (rows.length === 0) {
+            result.innerHTML = 'No recommendations found.';
+            return;
+        }
+        result.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>${safeText(r.locality)}</strong> (${safeText(r.city)}) | Score ${r.score}% | Avg ${formatCurrency(r.avg_rent)} | Commute ${r.commute_km} km | Livability ${r.livability}/10</div>`
+        )).join('');
+    } catch (err) {
+        result.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function runLabWhatIf() {
+    const out = document.getElementById('lab-whatif-result');
+    if (!out) return;
+    if (!latestPredictionInput) {
+        out.innerHTML = 'Run a prediction first to use what-if simulator.';
+        return;
+    }
+    out.innerHTML = 'Running what-if scenarios...';
+    try {
+        const payload = { base: latestPredictionInput };
+        const res = await fetch('/api/what_if', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'What-if failed');
+        const rows = data.scenarios || [];
+        out.innerHTML = rows.map((r) => (
+            `<div class="mini-card"><strong>${safeText(r.scenario)}</strong> | Rent ${formatCurrency(r.predicted_rent)} | Delta ${formatCurrency(r.delta_vs_baseline || 0)}</div>`
+        )).join('');
+    } catch (err) {
+        out.innerHTML = `Error: ${err.message}`;
+    }
+}
+
+async function runLabExplain() {
+    const out = document.getElementById('lab-explain-result');
+    if (!out) return;
+    if (!latestPredictionInput) {
+        out.textContent = 'Run a prediction first.';
+        return;
+    }
+    out.textContent = 'Loading explanation...';
+    try {
+        const res = await fetch('/api/explain_prediction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(latestPredictionInput)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Explainability failed');
+        out.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+        out.textContent = `Error: ${err.message}`;
+    }
+}
+
+async function runLabMonitoring() {
+    const out = document.getElementById('lab-monitoring-result');
+    if (!out) return;
+    out.textContent = 'Loading monitoring snapshot...';
+    try {
+        const res = await fetch('/api/model_monitoring');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Monitoring failed');
+        out.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+        out.textContent = `Error: ${err.message}`;
+    }
+}
+
+async function runLabRetrain() {
+    const out = document.getElementById('lab-retrain-result');
+    if (!out) return;
+    out.textContent = 'Running retrain pipeline... this may take time.';
+    try {
+        const res = await fetch('/api/retrain_pipeline', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Retrain failed');
+        out.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+        out.textContent = `Error: ${err.message}`;
     }
 }

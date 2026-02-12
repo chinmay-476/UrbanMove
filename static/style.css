@@ -37,6 +37,15 @@ body {
     gap: 2rem;
 }
 
+.sidebar nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: calc(100vh - 190px);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
 .logo h2 {
     font-size: 1.5rem;
     font-weight: 700;
@@ -571,6 +580,64 @@ select:focus {
     width: 100%;
 }
 
+.page-block {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.page-chart {
+    height: 320px;
+}
+
+.mini-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: flex-end;
+}
+
+.mini-form-row input,
+.mini-form-row select {
+    min-width: 140px;
+    flex: 1;
+}
+
+.mini-btn {
+    width: auto;
+    min-width: 130px;
+}
+
+.mini-status {
+    font-size: 0.85rem;
+    color: #cbd5e1;
+}
+
+.result-list {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.mini-card {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 10px;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.85rem;
+    color: #e2e8f0;
+}
+
+.mini-pre {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 10px;
+    padding: 0.75rem;
+    max-height: 260px;
+    overflow: auto;
+    font-size: 0.78rem;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+}
+
 /* Desktop UX: keep form stable, make results/advisors scrollable */
 @media (min-width: 961px) {
     .predict-layout {
@@ -679,5 +746,14 @@ select:focus {
     .trend-controls select {
         width: 100%;
         max-width: 110px;
+    }
+
+    .sidebar nav::-webkit-scrollbar {
+        width: 7px;
+    }
+
+    .sidebar nav::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.45);
+        border-radius: 9999px;
     }
 }

@@ -30,6 +30,30 @@
                 <a href="#" class="nav-item" onclick="showSection('predict')">
                     <span class="icon">AI</span> Rent Analytics
                 </a>
+                <a href="#" class="nav-item" onclick="showSection('trnd-view')">
+                    <span class="icon">TRND</span> Trends & Forecast
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('comp-view')">
+                    <span class="icon">COMP</span> Compare Listings
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('score-view')">
+                    <span class="icon">SCORE</span> Locality Scorecard
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('alrt-view')">
+                    <span class="icon">ALRT</span> Alerts
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('sim-view')">
+                    <span class="icon">SIM</span> Similar Homes
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('anom-view')">
+                    <span class="icon">ANOM</span> Price Intelligence
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('comm-view')">
+                    <span class="icon">COMM</span> Commute Planner
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('lab-view')">
+                    <span class="icon">LAB</span> Model Lab
+                </a>
             </nav>
         </aside>
 
@@ -210,6 +234,151 @@
                             <div id="budget-advisor-list"></div>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            <section id="trnd-view" class="view-section">
+                <header>
+                    <h1>TRND - Trends & Forecast</h1>
+                    <p class="subtitle">City/locality rent trend chart with 3/6/12 month forecast.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="trnd-city" placeholder="City (e.g., Mumbai)">
+                        <input type="number" id="trnd-bhk" min="1" value="2" placeholder="BHK">
+                        <input type="text" id="trnd-locality" placeholder="Locality (optional)">
+                        <select id="trnd-horizon">
+                            <option value="3">3M</option>
+                            <option value="6" selected>6M</option>
+                            <option value="12">12M</option>
+                        </select>
+                        <button class="btn-primary mini-btn" id="trnd-load-btn">Load Trend</button>
+                    </div>
+                    <div id="trnd-summary" class="mini-status"></div>
+                    <div class="trend-chart-wrap page-chart">
+                        <canvas id="trndChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="comp-view" class="view-section">
+                <header>
+                    <h1>COMP - Compare Listings</h1>
+                    <p class="subtitle">Compare selected listing IDs side by side.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="compare-ids" placeholder="IDs, e.g., 1,5,12">
+                        <button class="btn-primary mini-btn" id="compare-load-btn">Compare</button>
+                    </div>
+                    <div id="compare-summary" class="mini-status"></div>
+                    <div id="compare-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="score-view" class="view-section">
+                <header>
+                    <h1>SCORE - Locality Scorecard</h1>
+                    <p class="subtitle">Rank localities by affordability, livability, trend proxy, and demand.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="score-city" placeholder="City (optional)">
+                        <input type="number" id="score-bhk" min="1" value="2" placeholder="BHK">
+                        <button class="btn-primary mini-btn" id="score-load-btn">Load Scorecard</button>
+                    </div>
+                    <div id="score-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="alrt-view" class="view-section">
+                <header>
+                    <h1>ALRT - Saved Alerts</h1>
+                    <p class="subtitle">Create and check alerts for budget-friendly listings.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="alert-name" placeholder="Alert name">
+                        <input type="text" id="alert-city" placeholder="City">
+                        <input type="number" id="alert-bhk" min="1" value="2" placeholder="BHK">
+                        <input type="number" id="alert-budget" min="1000" value="30000" placeholder="Budget">
+                        <button class="btn-primary mini-btn" id="alert-create-btn">Save Alert</button>
+                        <button class="btn-primary mini-btn" id="alert-check-btn">Check Alerts</button>
+                    </div>
+                    <div id="alerts-list" class="result-list"></div>
+                    <div id="alerts-check-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="sim-view" class="view-section">
+                <header>
+                    <h1>SIM - Similar Homes</h1>
+                    <p class="subtitle">Find top similar listings for a property profile.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="sim-city" placeholder="City" value="Mumbai">
+                        <input type="number" id="sim-bhk" min="1" value="2" placeholder="BHK">
+                        <input type="number" id="sim-size" min="100" value="850" placeholder="Size">
+                        <input type="number" id="sim-bath" min="1" value="2" placeholder="Bath">
+                        <button class="btn-primary mini-btn" id="sim-load-btn">Find Similar</button>
+                        <button class="btn-primary mini-btn" id="sim-use-last-btn">Use Last Prediction</button>
+                    </div>
+                    <div id="sim-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="anom-view" class="view-section">
+                <header>
+                    <h1>ANOM - Price Intelligence</h1>
+                    <p class="subtitle">Underpriced, fair, and overpriced tagging using model residuals.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="anom-city" placeholder="City" value="Mumbai">
+                        <input type="number" id="anom-bhk" min="1" value="2" placeholder="BHK">
+                        <input type="number" id="anom-limit" min="10" max="150" value="50" placeholder="Limit">
+                        <button class="btn-primary mini-btn" id="anom-load-btn">Analyze Prices</button>
+                    </div>
+                    <div id="anom-summary" class="mini-status"></div>
+                    <div id="anom-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="comm-view" class="view-section">
+                <header>
+                    <h1>COMM - Commute Planner</h1>
+                    <p class="subtitle">Recommendations with commute-aware scoring.</p>
+                </header>
+                <div class="glass page-block">
+                    <div class="mini-form-row">
+                        <input type="text" id="comm-city" placeholder="City" value="Mumbai">
+                        <input type="number" id="comm-bhk" min="1" value="2" placeholder="BHK">
+                        <input type="number" id="comm-budget" min="1000" value="35000" placeholder="Budget">
+                        <input type="text" id="comm-work-city" placeholder="Work city" value="Mumbai">
+                        <button class="btn-primary mini-btn" id="comm-load-btn">Find Commute-Friendly</button>
+                    </div>
+                    <div id="comm-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="lab-view" class="view-section">
+                <header>
+                    <h1>LAB - Model Lab</h1>
+                    <p class="subtitle">Confidence, what-if, explainability, monitoring, and retrain controls.</p>
+                </header>
+                <div class="glass page-block">
+                    <div id="lab-confidence" class="mini-status">Run a prediction to see confidence range.</div>
+                    <div class="mini-form-row">
+                        <button class="btn-primary mini-btn" id="lab-whatif-btn">Run What-If</button>
+                        <button class="btn-primary mini-btn" id="lab-explain-btn">Explain Last Prediction</button>
+                        <button class="btn-primary mini-btn" id="lab-monitor-btn">Load Monitoring</button>
+                        <button class="btn-primary mini-btn" id="lab-retrain-btn">Run Retrain Pipeline</button>
+                    </div>
+                    <div id="lab-whatif-result" class="result-list"></div>
+                    <pre id="lab-explain-result" class="mini-pre"></pre>
+                    <pre id="lab-monitor-result" class="mini-pre"></pre>
+                    <pre id="lab-retrain-result" class="mini-pre"></pre>
                 </div>
             </section>
         </main>
