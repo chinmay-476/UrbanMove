@@ -91,6 +91,37 @@ def _safe_json_write(path, payload):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2)
 
+def _json_safe(value):
+    """Convert NaN/Inf and non-JSON-native scalars into JSON-safe values."""
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+
+    if isinstance(value, np.generic):
+        value = value.item()
+
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.isoformat()
+
+    if isinstance(value, float):
+        if not np.isfinite(value):
+            return None
+        return value
+
+    if isinstance(value, (int, str, bool)) or value is None:
+        return value
+
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+
+    return value
+
 def _get_city_coords(city):
     return CITY_COORDS.get(city, (20.5937, 78.9629))
 
@@ -1376,25 +1407,44 @@ def compare_listings():
         df = load_dataset()
         rows = []
         for idx in ids:
-            if 0 <= idx < len(df):
+            row = None
+
+            # Prefer label-based lookup because IDs emitted by APIs use dataset index.
+            if idx in df.index:
+                selected = df.loc[idx]
+                if isinstance(selected, pd.DataFrame):
+                    selected = selected.iloc[0]
+                row = selected.to_dict()
+            elif 0 <= idx < len(df):
                 row = df.iloc[idx].to_dict()
-                row['id'] = idx
-                rows.append(row)
+
+            if row is not None:
+                row['id'] = int(idx)
+                rows.append(_json_safe(row))
 
         if not rows:
             return jsonify({'comparisons': [], 'summary': {}})
 
-        rents = [float(r.get('Rent', 0)) for r in rows if str(r.get('Rent', '')).strip() != '']
-        sizes = [float(r.get('Size', 0)) for r in rows if str(r.get('Size', '')).strip() != '']
+        rents = (
+            pd.to_numeric(pd.Series([r.get('Rent') for r in rows]), errors='coerce')
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
+        sizes = (
+            pd.to_numeric(pd.Series([r.get('Size') for r in rows]), errors='coerce')
+            .replace([np.inf, -np.inf], np.nan)
+            .dropna()
+        )
+
         summary = {
             'count': len(rows),
-            'min_rent': round(min(rents), 2) if rents else None,
-            'max_rent': round(max(rents), 2) if rents else None,
-            'avg_rent': round(sum(rents) / len(rents), 2) if rents else None,
-            'min_size': round(min(sizes), 2) if sizes else None,
-            'max_size': round(max(sizes), 2) if sizes else None
+            'min_rent': round(float(rents.min()), 2) if not rents.empty else None,
+            'max_rent': round(float(rents.max()), 2) if not rents.empty else None,
+            'avg_rent': round(float(rents.mean()), 2) if not rents.empty else None,
+            'min_size': round(float(sizes.min()), 2) if not sizes.empty else None,
+            'max_size': round(float(sizes.max()), 2) if not sizes.empty else None
         }
-        return jsonify({'comparisons': rows, 'summary': summary})
+        return jsonify(_json_safe({'comparisons': rows, 'summary': summary}))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
