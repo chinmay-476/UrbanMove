@@ -22,13 +22,13 @@
             </div>
             <nav>
                 <a href="#" class="nav-item active" onclick="showSection('dashboard')">
-                    <span class="icon">📊</span> Dashboard
+                    <span class="icon">DB</span> Dashboard
                 </a>
                 <a href="#" class="nav-item" onclick="showSection('map-view')">
-                    <span class="icon">🗺️</span> Map Explore
+                    <span class="icon">MAP</span> Map Explore
                 </a>
                 <a href="#" class="nav-item" onclick="showSection('predict')">
-                    <span class="icon">📈</span> Rent Analytics
+                    <span class="icon">AI</span> Rent Analytics
                 </a>
             </nav>
         </aside>
@@ -165,8 +165,35 @@
                     <div class="result-panel">
                         <div class="result-container glass" id="result-box" style="display:none;">
                             <h3>Estimated Rent</h3>
-                            <div class="price" id="prediction-result">₹0</div>
+                            <div class="price" id="prediction-result">Rs 0</div>
                             <p class="disclaimer">Based on historical market data.</p>
+                        </div>
+                        <div class="market-insights-container glass" id="market-insights-box" style="display:none;">
+                            <div class="recommendations-header">
+                                <h3>Market Position</h3>
+                                <p class="subtitle small">How your estimate compares with similar listings.</p>
+                            </div>
+                            <div id="market-insights-content"></div>
+                        </div>
+                        <div class="trend-forecast-container glass" id="trend-forecast-box" style="display:none;">
+                            <div class="trend-forecast-head">
+                                <div>
+                                    <h3>Rent Trend Forecast</h3>
+                                    <p class="subtitle small">Monthly trend + short-term forecast for your selected market.</p>
+                                </div>
+                                <div class="trend-controls">
+                                    <label for="trend-horizon">Horizon</label>
+                                    <select id="trend-horizon">
+                                        <option value="3">3M</option>
+                                        <option value="6" selected>6M</option>
+                                        <option value="12">12M</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="trend-forecast-summary" id="trend-forecast-summary"></div>
+                            <div class="trend-chart-wrap">
+                                <canvas id="trendForecastChart"></canvas>
+                            </div>
                         </div>
                         <div class="recommendations-container glass" id="recommendations-box" style="display:none;">
                             <div class="recommendations-header">
@@ -174,6 +201,13 @@
                                 <p class="subtitle small">Based on your preferences and predicted rent.</p>
                             </div>
                             <div id="recommendations-list"></div>
+                        </div>
+                        <div class="budget-advisor-container glass" id="budget-advisor-box" style="display:none;">
+                            <div class="recommendations-header">
+                                <h3>Budget Advisor</h3>
+                                <p class="subtitle small">Top localities ranked by budget fit and livability.</p>
+                            </div>
+                            <div id="budget-advisor-list"></div>
                         </div>
                     </div>
                 </div>
@@ -184,3 +218,4 @@
 </body>
 
 </html>
+
