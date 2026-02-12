@@ -35,7 +35,7 @@ async function loadCities() {
 
         // Prefill city text inputs across feature pages for convenience.
         const defaultCity = (data.cities && data.cities.length > 0) ? data.cities[0] : 'Mumbai';
-        ['trnd-city', 'score-city', 'alert-city', 'sim-city', 'anom-city', 'comm-city', 'comm-work-city']
+        ['trnd-city', 'score-city']
             .forEach((id) => {
                 const el = document.getElementById(id);
                 if (el && !el.value) {
@@ -839,18 +839,6 @@ function initFeaturePages() {
     bindClick('trnd-load-btn', () => loadTrendsPage());
     bindClick('compare-load-btn', () => loadCompareListings());
     bindClick('score-load-btn', () => loadLocalityScorecard());
-    bindClick('alert-create-btn', () => createAlert());
-    bindClick('alert-check-btn', () => checkAlerts());
-    bindClick('sim-load-btn', () => loadSimilarHomes(false));
-    bindClick('sim-use-last-btn', () => loadSimilarHomes(true));
-    bindClick('anom-load-btn', () => loadPriceIntelligencePage());
-    bindClick('comm-load-btn', () => loadCommuteAdvisorPage());
-    bindClick('lab-whatif-btn', () => runLabWhatIf());
-    bindClick('lab-explain-btn', () => runLabExplain());
-    bindClick('lab-monitor-btn', () => runLabMonitoring());
-    bindClick('lab-retrain-btn', () => runLabRetrain());
-
-    refreshAlerts();
 }
 
 function safeText(value) {

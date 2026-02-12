@@ -39,21 +39,6 @@
                 <a href="#" class="nav-item" onclick="showSection('score-view')">
                     <span class="icon">🏙️</span> Locality Scorecard
                 </a>
-                <a href="#" class="nav-item" onclick="showSection('alrt-view')">
-                    <span class="icon">🔔</span> Alerts
-                </a>
-                <a href="#" class="nav-item" onclick="showSection('sim-view')">
-                    <span class="icon">🏠</span> Similar Homes
-                </a>
-                <a href="#" class="nav-item" onclick="showSection('anom-view')">
-                    <span class="icon">🧠</span> Price Intelligence
-                </a>
-                <a href="#" class="nav-item" onclick="showSection('comm-view')">
-                    <span class="icon">🚇</span> Commute Planner
-                </a>
-                <a href="#" class="nav-item" onclick="showSection('lab-view')">
-                    <span class="icon">🔬</span> Model Lab
-                </a>
             </nav>
         </aside>
 
@@ -288,97 +273,6 @@
                         <button class="btn-primary mini-btn" id="score-load-btn">Load Scorecard</button>
                     </div>
                     <div id="score-result" class="result-list"></div>
-                </div>
-            </section>
-
-            <section id="alrt-view" class="view-section">
-                <header>
-                    <h1>Saved Alerts</h1>
-                    <p class="subtitle">Create and check alerts for budget-friendly listings.</p>
-                </header>
-                <div class="glass page-block">
-                    <div class="mini-form-row">
-                        <input type="text" id="alert-name" placeholder="Alert name">
-                        <input type="text" id="alert-city" placeholder="City">
-                        <input type="number" id="alert-bhk" min="1" value="2" placeholder="BHK">
-                        <input type="number" id="alert-budget" min="1000" value="30000" placeholder="Budget">
-                        <button class="btn-primary mini-btn" id="alert-create-btn">Save Alert</button>
-                        <button class="btn-primary mini-btn" id="alert-check-btn">Check Alerts</button>
-                    </div>
-                    <div id="alerts-list" class="result-list"></div>
-                    <div id="alerts-check-result" class="result-list"></div>
-                </div>
-            </section>
-
-            <section id="sim-view" class="view-section">
-                <header>
-                    <h1>Similar Homes</h1>
-                    <p class="subtitle">Find top similar listings for a property profile.</p>
-                </header>
-                <div class="glass page-block">
-                    <div class="mini-form-row">
-                        <input type="text" id="sim-city" placeholder="City" value="Mumbai">
-                        <input type="number" id="sim-bhk" min="1" value="2" placeholder="BHK">
-                        <input type="number" id="sim-size" min="100" value="850" placeholder="Size">
-                        <input type="number" id="sim-bath" min="1" value="2" placeholder="Bath">
-                        <button class="btn-primary mini-btn" id="sim-load-btn">Find Similar</button>
-                        <button class="btn-primary mini-btn" id="sim-use-last-btn">Use Last Prediction</button>
-                    </div>
-                    <div id="sim-result" class="result-list"></div>
-                </div>
-            </section>
-
-            <section id="anom-view" class="view-section">
-                <header>
-                    <h1>Price Intelligence</h1>
-                    <p class="subtitle">Underpriced, fair, and overpriced tagging using model residuals.</p>
-                </header>
-                <div class="glass page-block">
-                    <div class="mini-form-row">
-                        <input type="text" id="anom-city" placeholder="City" value="Mumbai">
-                        <input type="number" id="anom-bhk" min="1" value="2" placeholder="BHK">
-                        <input type="number" id="anom-limit" min="10" max="150" value="50" placeholder="Limit">
-                        <button class="btn-primary mini-btn" id="anom-load-btn">Analyze Prices</button>
-                    </div>
-                    <div id="anom-summary" class="mini-status"></div>
-                    <div id="anom-result" class="result-list"></div>
-                </div>
-            </section>
-
-            <section id="comm-view" class="view-section">
-                <header>
-                    <h1>Commute Planner</h1>
-                    <p class="subtitle">Recommendations with commute-aware scoring.</p>
-                </header>
-                <div class="glass page-block">
-                    <div class="mini-form-row">
-                        <input type="text" id="comm-city" placeholder="City" value="Mumbai">
-                        <input type="number" id="comm-bhk" min="1" value="2" placeholder="BHK">
-                        <input type="number" id="comm-budget" min="1000" value="35000" placeholder="Budget">
-                        <input type="text" id="comm-work-city" placeholder="Work city" value="Mumbai">
-                        <button class="btn-primary mini-btn" id="comm-load-btn">Find Commute-Friendly</button>
-                    </div>
-                    <div id="comm-result" class="result-list"></div>
-                </div>
-            </section>
-
-            <section id="lab-view" class="view-section">
-                <header>
-                    <h1>Model Lab</h1>
-                    <p class="subtitle">Confidence, what-if, explainability, monitoring, and retrain controls.</p>
-                </header>
-                <div class="glass page-block">
-                    <div id="lab-confidence" class="mini-status">Run a prediction to see confidence range.</div>
-                    <div class="mini-form-row">
-                        <button class="btn-primary mini-btn" id="lab-whatif-btn">Run What-If</button>
-                        <button class="btn-primary mini-btn" id="lab-explain-btn">Explain Last Prediction</button>
-                        <button class="btn-primary mini-btn" id="lab-monitor-btn">Load Monitoring</button>
-                        <button class="btn-primary mini-btn" id="lab-retrain-btn">Run Retrain Pipeline</button>
-                    </div>
-                    <div id="lab-whatif-result" class="result-list"></div>
-                    <pre id="lab-explain-result" class="mini-pre"></pre>
-                    <pre id="lab-monitor-result" class="mini-pre"></pre>
-                    <pre id="lab-retrain-result" class="mini-pre"></pre>
                 </div>
             </section>
         </main>

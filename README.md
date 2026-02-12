@@ -102,27 +102,7 @@ Decisions related to rental housing in metropolitan cities have become increasin
    - Set city and BHK.
    - Click `Load Scorecard` to rank localities by affordability, livability, trend proxy, and demand.
 
-7. `🔔 Alerts`
-   - Create alerts using city/BHK/budget.
-   - Click `Save Alert`, then `Check Alerts` to find matching listings.
-
-8. `🏠 Similar Homes`
-   - Use manual inputs and click `Find Similar`, or click `Use Last Prediction`.
-   - Shows top similar listings with match score.
-
-9. `🧠 Price Intelligence`
-   - Choose city, BHK, and sample limit.
-   - Click `Analyze Prices` to label records as `Underpriced`, `Fair`, or `Overpriced`.
-
-10. `🚇 Commute Planner`
-    - Set city, budget, BHK, and work city.
-    - Click `Find Commute-Friendly` to get locality recommendations with commute distance.
-
-11. `🔬 Model Lab`
-    - `Run What-If`: scenario simulation from latest prediction.
-    - `Explain Last Prediction`: feature-impact style explanation.
-    - `Load Monitoring`: data quality, drift snapshot, model metrics.
-    - `Run Retrain Pipeline`: retrain and safe-promote/revert based on MAE.
+Advanced pages (`Alerts`, `Similar Homes`, `Price Intelligence`, `Commute Planner`, and `Model Lab`) are intentionally hidden from the UI for a simpler workflow.
 
 ## Functionality Smoke Test
 Run this to verify all APIs after changes:
