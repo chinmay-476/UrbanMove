@@ -9,6 +9,7 @@ import random
 from datetime import datetime
 import subprocess
 import shutil
+import sys
 from math import radians, sin, cos, sqrt, atan2
 
 # Initialize Flask app with static folder
@@ -1202,14 +1203,19 @@ def retrain_pipeline():
     global model
     try:
         os.makedirs(ARTIFACTS_DIR, exist_ok=True)
-        old_model = model if model is not None else (joblib.load(MODEL_PATH) if os.path.exists(MODEL_PATH) else None)
+        old_model = model
+        if old_model is None and os.path.exists(MODEL_PATH):
+            try:
+                old_model = joblib.load(MODEL_PATH)
+            except Exception:
+                old_model = None
         old_mae = _evaluate_model_mae(old_model) if old_model is not None else None
 
         backup_path = MODEL_PATH + '.backup'
         if os.path.exists(MODEL_PATH):
             shutil.copy2(MODEL_PATH, backup_path)
 
-        cmd = ['python', os.path.join('scripts', 'train_models.py')]
+        cmd = [sys.executable, os.path.join('scripts', 'train_models.py')]
         proc = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True, timeout=900)
         if proc.returncode != 0:
             if os.path.exists(backup_path):
@@ -1220,7 +1226,17 @@ def retrain_pipeline():
                 'stderr_tail': proc.stderr[-1000:]
             }), 500
 
-        new_model = joblib.load(MODEL_PATH)
+        try:
+            new_model = joblib.load(MODEL_PATH)
+        except Exception as load_err:
+            if os.path.exists(backup_path):
+                shutil.copy2(backup_path, MODEL_PATH)
+            return jsonify({
+                'status': 'failed',
+                'error': f'New model artifact incompatible: {load_err}',
+                'stdout_tail': proc.stdout[-1000:],
+                'stderr_tail': proc.stderr[-1000:]
+            }), 500
         new_mae = _evaluate_model_mae(new_model)
 
         promoted = True
@@ -1230,7 +1246,10 @@ def retrain_pipeline():
             reason = 'new model reverted (MAE degraded >5%)'
             if os.path.exists(backup_path):
                 shutil.copy2(backup_path, MODEL_PATH)
-            model = joblib.load(MODEL_PATH)
+            try:
+                model = joblib.load(MODEL_PATH)
+            except Exception:
+                model = None
         else:
             model = new_model
 

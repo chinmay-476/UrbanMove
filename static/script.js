@@ -1204,7 +1204,7 @@ async function runLabExplain() {
 }
 
 async function runLabMonitoring() {
-    const out = document.getElementById('lab-monitoring-result');
+    const out = document.getElementById('lab-monitor-result');
     if (!out) return;
     out.textContent = 'Loading monitoring snapshot...';
     try {

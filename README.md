@@ -70,3 +70,71 @@ Decisions related to rental housing in metropolitan cities have become increasin
    ```bash
    python app.py
    ```
+
+## How To Use (Page by Page)
+1. `📊 Dashboard`
+   - Opens by default and shows market KPIs.
+   - Hover bars in the city chart to see city-wise average rent in the stat card.
+
+2. `🗺️ Map Explore`
+   - Explore listing clusters and heat layer.
+   - Click anywhere on the map or a marker to open that location in Google Maps.
+
+3. `💡 Rent Analytics`
+   - Fill `City`, `BHK`, `Size`, `Bathrooms`, furnishing details, then click `Predict Rent`.
+   - After prediction, the right panel auto-loads:
+   - confidence range (low/expected/high),
+   - market position,
+   - trend forecast,
+   - suggested locations,
+   - budget advisor.
+   - On desktop, form stays fixed and result cards are independently scrollable.
+
+4. `📈 Trends & Forecast`
+   - Enter city/locality filters and forecast horizon (`3M/6M/12M`).
+   - Click `Load Trend` to view historical median trend and projected curve.
+
+5. `📋 Compare Listings`
+   - Enter comma-separated listing IDs (example: `1,5,12`).
+   - Click `Compare` for side-by-side summary.
+
+6. `🏙️ Locality Scorecard`
+   - Set city and BHK.
+   - Click `Load Scorecard` to rank localities by affordability, livability, trend proxy, and demand.
+
+7. `🔔 Alerts`
+   - Create alerts using city/BHK/budget.
+   - Click `Save Alert`, then `Check Alerts` to find matching listings.
+
+8. `🏠 Similar Homes`
+   - Use manual inputs and click `Find Similar`, or click `Use Last Prediction`.
+   - Shows top similar listings with match score.
+
+9. `🧠 Price Intelligence`
+   - Choose city, BHK, and sample limit.
+   - Click `Analyze Prices` to label records as `Underpriced`, `Fair`, or `Overpriced`.
+
+10. `🚇 Commute Planner`
+    - Set city, budget, BHK, and work city.
+    - Click `Find Commute-Friendly` to get locality recommendations with commute distance.
+
+11. `🔬 Model Lab`
+    - `Run What-If`: scenario simulation from latest prediction.
+    - `Explain Last Prediction`: feature-impact style explanation.
+    - `Load Monitoring`: data quality, drift snapshot, model metrics.
+    - `Run Retrain Pipeline`: retrain and safe-promote/revert based on MAE.
+
+## Functionality Smoke Test
+Run this to verify all APIs after changes:
+```bash
+python -m py_compile app.py
+node --check static/script.js
+```
+
+For endpoint checks, use Flask `test_client` to call:
+`/api/stats`, `/api/properties`, `/api/map_data`, `/api/properties/<id>`, `/api/cities`,
+`/api/budget_advisor`, `/api/market_insights`, `/api/rent_trends`, `/api/predict`,
+`/api/what_if`, `/api/similar_listings`, `/api/price_intelligence`,
+`/api/locality_scorecard`, `/api/commute_advisor`, `/api/explain_prediction`,
+`/api/model_monitoring`, `/api/retrain_pipeline`, `/api/alerts`,
+`/api/alerts/check`, `/api/compare_listings`.
