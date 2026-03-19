@@ -991,6 +991,18 @@ body[data-theme='light'] .mode-chip.is-active {
     color: #e0e7ff;
 }
 
+body[data-theme='light'] .analytics-status-pill-classic {
+    background: rgba(34, 197, 94, 0.14);
+    border: 1px solid rgba(22, 163, 74, 0.22);
+    color: #166534;
+}
+
+body[data-theme='light'] .analytics-status-pill-glass {
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.18);
+    color: #3730a3;
+}
+
 #predict[data-analytics-mode='classic'] .analytics-mode-status {
     background: rgba(34, 197, 94, 0.12);
     border-color: rgba(34, 197, 94, 0.28);
@@ -1007,6 +1019,21 @@ body[data-theme='light'] .analytics-mode-status {
     background: rgba(255, 255, 255, 0.92);
     border-color: rgba(99, 102, 241, 0.16);
     color: #334155;
+}
+
+body[data-theme='light'] .analytics-mode-status strong {
+    color: #0f172a;
+}
+
+body[data-theme='light'] #predict[data-analytics-mode='classic'] .analytics-mode-status {
+    background: rgba(240, 253, 244, 0.96);
+    border-color: rgba(22, 163, 74, 0.22);
+    color: #166534;
+    box-shadow: 0 10px 24px rgba(34, 197, 94, 0.08);
+}
+
+body[data-theme='light'] #predict[data-analytics-mode='classic'] .analytics-mode-status strong {
+    color: #14532d;
 }
 
 body[data-theme='light'] .analytics-splitter-pill {
@@ -1330,6 +1357,10 @@ body.analytics-resizing * {
     backdrop-filter: none;
 }
 
+body[data-theme='light'] #predict[data-analytics-mode='glass'] {
+    color-scheme: dark;
+}
+
 #predict[data-analytics-mode='glass'] .analytics-intro-shell {
     background:
         radial-gradient(circle at 10% 18%, rgba(99, 102, 241, 0.2), transparent 28%),
@@ -1412,6 +1443,7 @@ body.analytics-resizing * {
 }
 
 #predict[data-analytics-mode='glass'] .predict-layout {
+    align-items: start;
     padding: 1.35rem;
     border-radius: 30px;
     background:
@@ -1503,11 +1535,16 @@ body.analytics-resizing * {
     background: linear-gradient(180deg, rgba(4, 8, 16, 0.82), rgba(9, 15, 28, 0.88));
     border: 1px solid rgba(148, 163, 184, 0.14);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    transform: translateY(18px);
 }
 
 #predict[data-analytics-mode='glass'] .advanced-group {
     background: rgba(15, 23, 42, 0.52);
     border-color: rgba(129, 140, 248, 0.22);
+}
+
+#predict[data-analytics-mode='glass'] .result-panel {
+    padding-top: 0.35rem;
 }
 
 #predict[data-analytics-mode='glass'] .analytics-splitter-pill {
@@ -2862,6 +2899,7 @@ body::-webkit-scrollbar,
         border: none;
         background: transparent;
         box-shadow: none;
+        transform: none;
     }
 
     #predict[data-analytics-mode='glass'] #analytics-form-shell {
@@ -2869,6 +2907,7 @@ body::-webkit-scrollbar,
         border: none;
         background: transparent;
         box-shadow: none;
+        transform: none;
     }
 
     #predict[data-analytics-mode='glass'] .form-step-card-optional {
