@@ -27,6 +27,7 @@ let recommendationRefreshTimer = null;
 let costRefreshTimer = null;
 let map;
 let baseMapTileLayer = null;
+let mapMarkerIndex = new Map();
 
 const DEFAULT_COST_INPUTS = {
     deposit_months: 2,
@@ -51,6 +52,17 @@ const ANALYTICS_SPLIT_STORAGE_KEY = 'urbanmove-analytics-split';
 const WORK_MAP_STATUS_DEFAULT = 'Paste a pinned map link and the app will read latitude and longitude automatically.';
 const FALLBACK_API_BASES = ['http://127.0.0.1:5000', 'http://localhost:5000'];
 const DEFAULT_ANALYTICS_SPLITS = { classic: 42, glass: 58 };
+const MAP_LIVABILITY_BANDS = [
+    { key: 'needs-work', label: 'Needs work', min: 0, max: 4.4, color: '#ef4444', weight: 0.22, radius: 16 },
+    { key: 'balanced', label: 'Balanced', min: 4.5, max: 6.4, color: '#f59e0b', weight: 0.46, radius: 20 },
+    { key: 'strong-fit', label: 'Strong fit', min: 6.5, max: 7.9, color: '#22c55e', weight: 0.72, radius: 24 },
+    { key: 'premium-fit', label: 'Premium fit', min: 8.0, max: 10.0, color: '#06b6d4', weight: 1.0, radius: 28 }
+];
+const MAP_RENT_BANDS = [
+    { key: 'budget', label: 'Budget', max: 29999, color: '#6366f1' },
+    { key: 'mid-range', label: 'Mid-range', max: 49999, color: '#f59e0b' },
+    { key: 'premium', label: 'Premium', max: Infinity, color: '#ef4444' }
+];
 let currentTheme = 'dark';
 let resolvedApiBase = null;
 let currentAnalyticsSplits = { ...DEFAULT_ANALYTICS_SPLITS };
@@ -518,7 +530,7 @@ function showSection(id) {
     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
     document.getElementById(id).classList.add('active');
-    if (typeof event !== 'undefined' && event && event.currentTarget) {
+    if (typeof event !== 'undefined' && event && event.currentTarget?.classList?.contains('nav-item')) {
         event.currentTarget.classList.add('active');
     } else {
         const navItem = document.querySelector(`.nav-item[onclick*="${id}"]`);
@@ -546,6 +558,186 @@ function showSection(id) {
     if (id === 'planner-view') {
         refreshPlannerData();
     }
+}
+
+function buildMapLocationKey(lat, lon) {
+    const numericLat = Number(lat);
+    const numericLon = Number(lon);
+    if (!Number.isFinite(numericLat) || !Number.isFinite(numericLon)) return '';
+    return `${numericLat.toFixed(5)},${numericLon.toFixed(5)}`;
+}
+
+function getMapLivabilityBand(score) {
+    const numericScore = Number(score);
+    const safeScore = Number.isFinite(numericScore) ? numericScore : 0;
+    return MAP_LIVABILITY_BANDS.find((band, index) => (
+        safeScore >= band.min && (safeScore <= band.max || index === MAP_LIVABILITY_BANDS.length - 1)
+    )) || MAP_LIVABILITY_BANDS[0];
+}
+
+function getMapRentBand(rent) {
+    const numericRent = Number(rent);
+    const safeRent = Number.isFinite(numericRent) ? numericRent : 0;
+    return MAP_RENT_BANDS.find((band) => safeRent <= band.max) || MAP_RENT_BANDS[MAP_RENT_BANDS.length - 1];
+}
+
+function formatMapLivabilityRange(band) {
+    return `${band.min.toFixed(1)} - ${band.max.toFixed(1)} / 10`;
+}
+
+function formatMapRentRange(band, index) {
+    if (index === 0) {
+        return `Up to ${formatCurrency(band.max)}`;
+    }
+
+    const start = MAP_RENT_BANDS[index - 1].max + 1;
+    if (!Number.isFinite(band.max)) {
+        return `${formatCurrency(start)} and above`;
+    }
+
+    return `${formatCurrency(start)} - ${formatCurrency(band.max)}`;
+}
+
+function renderMapCategoryLegend(points = []) {
+    const panel = document.getElementById('map-category-legend');
+    if (!panel) return;
+
+    const totalPoints = Array.isArray(points) ? points.length : 0;
+    if (totalPoints === 0) {
+        panel.innerHTML = `
+            <div class="map-info-header">
+                <div>
+                    <h3>How the map is categorized</h3>
+                    <p class="section-subtitle">Heat zones will appear here after the map data loads.</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    const livabilityCounts = MAP_LIVABILITY_BANDS.map((band) => ({ ...band, count: 0 }));
+    const rentCounts = MAP_RENT_BANDS.map((band) => ({ ...band, count: 0 }));
+
+    points.forEach((point) => {
+        const livabilityBand = getMapLivabilityBand(point.Neighborhood_Livability_Score);
+        const rentBand = getMapRentBand(point.Rent);
+        const livabilityTarget = livabilityCounts.find((band) => band.key === livabilityBand.key);
+        const rentTarget = rentCounts.find((band) => band.key === rentBand.key);
+        if (livabilityTarget) livabilityTarget.count += 1;
+        if (rentTarget) rentTarget.count += 1;
+    });
+
+    panel.innerHTML = `
+        <div class="map-info-header">
+            <div>
+                <h3>How the map is categorized</h3>
+                <p class="section-subtitle">Heat zones use livability score bands. Marker colors use monthly rent bands.</p>
+            </div>
+            <div class="map-info-summary">${totalPoints} mapped locations</div>
+        </div>
+        <div class="map-legend-grid">
+            <section class="map-legend-section">
+                <div class="map-legend-section-head">
+                    <h4>Heat Zones</h4>
+                    <p>Areas are grouped by neighborhood livability.</p>
+                </div>
+                ${livabilityCounts.map((band) => `
+                    <div class="map-legend-item">
+                        <span class="map-legend-swatch map-tone-${band.key}"></span>
+                        <div class="map-legend-copy">
+                            <strong>${escapeHtml(band.label)}</strong>
+                            <span>${escapeHtml(formatMapLivabilityRange(band))}</span>
+                        </div>
+                        <span class="map-legend-count">${band.count} areas</span>
+                    </div>
+                `).join('')}
+            </section>
+            <section class="map-legend-section">
+                <div class="map-legend-section-head">
+                    <h4>Marker Colors</h4>
+                    <p>Dots show the rent band of each listing point.</p>
+                </div>
+                ${rentCounts.map((band, index) => `
+                    <div class="map-legend-item">
+                        <span class="map-legend-swatch map-tone-${band.key}"></span>
+                        <div class="map-legend-copy">
+                            <strong>${escapeHtml(band.label)}</strong>
+                            <span>${escapeHtml(formatMapRentRange(band, index))}</span>
+                        </div>
+                        <span class="map-legend-count">${band.count} listings</span>
+                    </div>
+                `).join('')}
+            </section>
+        </div>
+        <div class="map-legend-note">Selecting a location from recommendations now jumps this heat map to that exact point and opens its details.</div>
+    `;
+}
+
+function buildMapPopupContent(point, livabilityBand, rentBand) {
+    const locationName = safeText(point['Area Locality']) || safeText(point.City) || 'Unknown Location';
+    const city = safeText(point.City) || 'Unknown city';
+    const rent = Number(point.Rent) || 0;
+    const livabilityScore = parseNumberOrNull(point.Neighborhood_Livability_Score);
+    const metaItems = [
+        point.BHK ? `<span>${escapeHtml(safeText(point.BHK))} BHK</span>` : '',
+        point.Size ? `<span>${escapeHtml(safeText(point.Size))} sqft</span>` : '',
+        point['Furnishing Status'] ? `<span>${escapeHtml(safeText(point['Furnishing Status']))}</span>` : '',
+        point['Area Type'] ? `<span>${escapeHtml(safeText(point['Area Type']))}</span>` : ''
+    ].filter(Boolean).join('');
+    const gmapsUrl = `https://www.google.com/maps?q=${Number(point.Latitude)},${Number(point.Longitude)}`;
+
+    return `
+        <div class="map-popup-card">
+            <div class="map-popup-head">
+                <div>
+                    <div class="map-popup-title">${escapeHtml(locationName)}</div>
+                    <div class="map-popup-subtitle">${escapeHtml(city)}</div>
+                </div>
+                <div class="map-popup-rent">${formatCurrency(rent)}</div>
+            </div>
+            <div class="map-popup-badges">
+                <span class="map-popup-badge map-tone-${rentBand.key}">${escapeHtml(rentBand.label)} rent</span>
+                <span class="map-popup-badge map-tone-${livabilityBand.key}">${escapeHtml(livabilityBand.label)} livability</span>
+                ${point.Cluster_ID !== undefined && point.Cluster_ID !== null ? `<span class="map-popup-badge">Cluster ${escapeHtml(safeText(point.Cluster_ID))}</span>` : ''}
+            </div>
+            ${metaItems ? `<div class="map-popup-meta">${metaItems}</div>` : ''}
+            <div class="map-popup-grid">
+                <div class="map-popup-stat">
+                    <span>Livability</span>
+                    <strong>${livabilityScore !== null ? `${livabilityScore.toFixed(1)} / 10` : 'Not rated'}</strong>
+                </div>
+                <div class="map-popup-stat">
+                    <span>Coordinates</span>
+                    <strong>${Number(point.Latitude).toFixed(4)}, ${Number(point.Longitude).toFixed(4)}</strong>
+                </div>
+            </div>
+            <a class="map-popup-link" href="${gmapsUrl}" target="_blank" rel="noopener noreferrer">Open exact location in Google Maps</a>
+        </div>
+    `;
+}
+
+function focusMapLocation(lat, lon, options = {}) {
+    const numericLat = Number(lat);
+    const numericLon = Number(lon);
+    if (!Number.isFinite(numericLat) || !Number.isFinite(numericLon) || !map) return;
+
+    const zoom = Number.isFinite(Number(options.zoom)) ? Number(options.zoom) : 13;
+    const locationKey = buildMapLocationKey(numericLat, numericLon);
+    showSection('map-view');
+
+    window.setTimeout(() => {
+        map.invalidateSize();
+        if (typeof map.flyTo === 'function') {
+            map.flyTo([numericLat, numericLon], zoom, { duration: 0.8 });
+        } else {
+            map.setView([numericLat, numericLon], zoom);
+        }
+
+        const marker = mapMarkerIndex.get(locationKey);
+        if (marker) {
+            window.setTimeout(() => marker.openPopup(), 240);
+        }
+    }, 120);
 }
 
 // Stats
@@ -677,114 +869,88 @@ async function loadStats() {
 
 // Map
 async function initMap() {
-    // Center on India broadly
     map = L.map('map').setView([22.3511, 78.6677], 5);
+    mapMarkerIndex = new Map();
 
-    // Click anywhere on the map to open that point directly in Google Maps
     map.on('click', (e) => {
         const { lat, lng } = e.latlng;
         const gmapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
         window.open(gmapsUrl, '_blank', 'noopener');
     });
 
-    // Create dedicated pane for heatmap under markers
     map.createPane('heatmapPane');
     map.getPane('heatmapPane').style.zIndex = 300;
+    map.createPane('zonePane');
+    map.getPane('zonePane').style.zIndex = 340;
+    map.getPane('zonePane').style.pointerEvents = 'none';
     baseMapTileLayer = L.tileLayer(getThemeTileUrl(), {
         attribution: '(c) CARTO'
     });
     baseMapTileLayer.addTo(map);
+    renderMapCategoryLegend();
 
     try {
         const res = await apiFetch('/api/map_data');
         const data = await res.json();
+        const points = Array.isArray(data) ? data.filter((point) => (
+            Number.isFinite(Number(point.Latitude)) && Number.isFinite(Number(point.Longitude))
+        )) : [];
 
-        // Heatmap Data: [lat, lng, intensity]
-        // Intensity based on Neighborhood_Livability_Score (normalized if needed, but heat layer handles it usually)
-        const heatPoints = data.map(p => [p.Latitude, p.Longitude, p.Neighborhood_Livability_Score ? p.Neighborhood_Livability_Score * 10 : 0.5]);
+        renderMapCategoryLegend(points);
+        const heatPoints = points.map((point) => {
+            const band = getMapLivabilityBand(point.Neighborhood_Livability_Score);
+            return [Number(point.Latitude), Number(point.Longitude), band.weight];
+        });
 
         if (L.heatLayer) {
             L.heatLayer(heatPoints, {
-                radius: 25,
-                blur: 15,
+                radius: 30,
+                blur: 22,
                 maxZoom: 17,
-                gradient: { 0.2: '#0ea5e9', 0.4: '#22c55e', 0.7: '#f59e0b', 1: '#ef4444' },
+                minOpacity: 0.24,
+                gradient: {
+                    0.12: MAP_LIVABILITY_BANDS[0].color,
+                    [MAP_LIVABILITY_BANDS[1].weight]: MAP_LIVABILITY_BANDS[1].color,
+                    [MAP_LIVABILITY_BANDS[2].weight]: MAP_LIVABILITY_BANDS[2].color,
+                    [MAP_LIVABILITY_BANDS[3].weight]: MAP_LIVABILITY_BANDS[3].color
+                },
                 pane: 'heatmapPane'
             }).addTo(map);
         }
 
-        // Add Circle Markers with labels for detailed info interaction
-        const markers = [];
-        data.forEach(p => {
-            // Color marker based on Rent (red for expensive, blue for affordable)
-            const rent = p.Rent || 0;
-            const color = rent > 50000 ? '#ef4444' : rent > 30000 ? '#f59e0b' : '#6366f1';
-            const locationName = p['Area Locality'] || p.City || 'Unknown Location';
-            const gmapsUrl = `https://www.google.com/maps?q=${p.Latitude},${p.Longitude}`;
-            
-            // Create marker with label
-            const marker = L.circleMarker([p.Latitude, p.Longitude], {
+        points.forEach((point) => {
+            const livabilityBand = getMapLivabilityBand(point.Neighborhood_Livability_Score);
+            const rentBand = getMapRentBand(point.Rent);
+            const lat = Number(point.Latitude);
+            const lon = Number(point.Longitude);
+            const locationName = safeText(point['Area Locality']) || safeText(point.City) || 'Unknown Location';
+            const rent = Number(point.Rent) || 0;
+
+            L.circleMarker([lat, lon], {
+                radius: livabilityBand.radius,
+                fillColor: livabilityBand.color,
+                color: livabilityBand.color,
+                weight: 1,
+                fillOpacity: 0.14,
+                opacity: 0.28,
+                pane: 'zonePane',
+                interactive: false
+            }).addTo(map);
+
+            const marker = L.circleMarker([lat, lon], {
                 radius: 6,
-                fillColor: color,
+                fillColor: rentBand.color,
                 color: '#fff',
                 weight: 1.5,
-                fillOpacity: 0.7,
+                fillOpacity: 0.88,
                 className: 'marker-point',
-                pane: 'markerPane', // ensure marker sits above heat layer
+                pane: 'markerPane',
                 zIndexOffset: 500
             });
-            
-            // Build comprehensive popup content
-            let popupContent = `
-                <div style="color: #1e293b; font-family: 'Inter', sans-serif; min-width: 200px;">
-                    <h4 style="margin: 0 0 8px 0; padding-bottom: 6px; border-bottom: 2px solid #6366f1; color: #0f172a; font-size: 1.1em;">
-                         ${locationName}
-                    </h4>
-                    <div style="margin-bottom: 6px;"><strong>City:</strong> ${p.City || 'N/A'}</div>
-                    <div style="margin-bottom: 6px; font-size: 1.2em; color: #059669; font-weight: 600;">
-                         <strong>Rent:</strong> ${formatCurrency(rent)}
-                    </div>
-            `;
-            
-            if (p.BHK) {
-                popupContent += `<div style="margin-bottom: 4px;"><strong>BHK:</strong> ${p.BHK}</div>`;
-            }
-            if (p.Size) {
-                popupContent += `<div style="margin-bottom: 4px;"><strong>Size:</strong> ${p.Size} sqft</div>`;
-            }
-            if (p['Furnishing Status']) {
-                popupContent += `<div style="margin-bottom: 4px;"><strong>Furnishing:</strong> ${p['Furnishing Status']}</div>`;
-            }
-            if (p['Area Type']) {
-                popupContent += `<div style="margin-bottom: 4px;"><strong>Area Type:</strong> ${p['Area Type']}</div>`;
-            }
-            if (p.Neighborhood_Livability_Score) {
-                const score = parseFloat(p.Neighborhood_Livability_Score).toFixed(1);
-                const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#f59e0b' : '#ef4444';
-                popupContent += `<div style="margin-bottom: 4px;">
-                    <strong>Livability Score:</strong> 
-                    <span style="color: ${scoreColor}; font-weight: 600;">${score}/10</span>
-                </div>`;
-            }
-            if (p.Cluster_ID !== undefined) {
-                popupContent += `<div style="margin-bottom: 4px;"><strong>Cluster Zone:</strong> ${p.Cluster_ID}</div>`;
-            }
-            
-            popupContent += `
-                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 0.75em; color: #64748b;">
-                         Coordinates: ${p.Latitude.toFixed(4)}, ${p.Longitude.toFixed(4)}
-                        <div style="margin-top: 6px;">
-                            <a href="${gmapsUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; font-weight: 600; text-decoration: none;">Open in Google Maps -></a>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-            
-            // Add label/tooltip showing location name
+
+            marker.bindPopup(buildMapPopupContent(point, livabilityBand, rentBand));
             marker.bindTooltip(
-                `<div style="font-weight: 600; font-size: 0.85em;">${locationName}<br/>${formatCurrency(rent)}</div>`,
+                `<div class="map-tooltip-label"><strong>${escapeHtml(locationName)}</strong><span>${formatCurrency(rent)}</span></div>`,
                 {
                     permanent: false,
                     direction: 'top',
@@ -792,49 +958,22 @@ async function initMap() {
                     className: 'map-label'
                 }
             );
-            
-            // Open Google Maps directly on marker click
-            marker.on('click', (ev) => {
-                // Stop Leaflet default behavior interfering with navigation
-                if (ev.originalEvent) {
-                    ev.originalEvent.preventDefault();
-                    ev.originalEvent.stopPropagation();
-                }
-                window.open(gmapsUrl, '_blank', 'noopener');
-            });
-            
-            marker.addTo(map);
-            if (marker.bringToFront) marker.bringToFront(); // ensure markers are above heat layer
-            markers.push(marker);
-        });
-        
-        // Add legend for the heatmap
-        const legend = L.control({position: 'bottomright'});
-        legend.onAdd = function(map) {
-            const div = L.DomUtil.create('div', 'map-legend');
-            div.style.backgroundColor = 'rgba(30, 41, 59, 0.9)';
-            div.style.padding = '12px';
-            div.style.borderRadius = '8px';
-            div.style.color = '#f8fafc';
-            div.style.fontSize = '0.85em';
-            div.style.fontFamily = 'Inter, sans-serif';
-            div.innerHTML = `
-                <h4 style="margin: 0 0 8px 0; font-size: 0.9em; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 4px;">Heatmap (Livability)</h4>
-                <div style="margin-bottom: 4px;">* Low</div>
-                <div style="margin-bottom: 4px;">* Medium</div>
-                <div style="margin-bottom: 4px;">* High</div>
-                <div style="margin-bottom: 8px;">* Very High</div>
-                <h4 style="margin: 8px 0 4px 0; font-size: 0.9em; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">Marker Colors</h4>
-                <div style="margin-bottom: 4px;">* Affordable (&lt;Rs 30k)</div>
-                <div style="margin-bottom: 4px;">* Moderate (Rs 30k-Rs 50k)</div>
-                <div>* Expensive (&gt;Rs 50k)</div>
-            `;
-            return div;
-        };
-        legend.addTo(map);
 
+            marker.on('click', (event) => {
+                if (event.originalEvent) {
+                    event.originalEvent.preventDefault();
+                    event.originalEvent.stopPropagation();
+                }
+                marker.openPopup();
+            });
+
+            marker.addTo(map);
+            if (marker.bringToFront) marker.bringToFront();
+            mapMarkerIndex.set(buildMapLocationKey(lat, lon), marker);
+        });
     } catch (err) {
         console.error("Map data error", err);
+        renderMapCategoryLegend();
     }
 }
 
@@ -1824,10 +1963,10 @@ async function loadRecommendations(formInput, predictedRent) {
                 .map((flag) => `<span class="flag-chip">${escapeHtml(flag.replace(/_/g, ' '))}</span>`)
                 .join('');
             const trustLabel = getTrustLabel(item.sample_trust_score);
-            const mapsUrl = `https://www.google.com/maps?q=${item.coordinates.lat},${item.coordinates.lon}`;
             const profileBadge = item.profile_source === 'curated' ? 'Curated profile' : 'Fallback profile';
             const profileNotes = normalizeOptionalText(item.profile_notes);
             const listingId = parseInt(item.sample_listing_id, 10);
+            const hasCoordinates = Number.isFinite(Number(item.coordinates?.lat)) && Number.isFinite(Number(item.coordinates?.lon));
             const operationalBadges = renderListingOperationalBadges(
                 item.sample_freshness_label,
                 item.sample_freshness_class,
@@ -1874,7 +2013,7 @@ async function loadRecommendations(formInput, predictedRent) {
                     ${flagChips ? `<div class="chip-row">${flagChips}</div>` : ''}
                     ${profileNotes ? `<div class="recommendation-note">${escapeHtml(profileNotes)}</div>` : ''}
                     <div class="recommendation-actions">
-                        <a class="btn-link" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Open map</a>
+                        ${hasCoordinates ? `<button class="btn-link focus-map-btn" type="button" data-lat="${escapeHtml(item.coordinates.lat)}" data-lon="${escapeHtml(item.coordinates.lon)}">View on heat map</button>` : ''}
                         ${Number.isFinite(listingId) ? `<button class="btn-link add-compare-btn" type="button" data-id="${listingId}">Compare</button>` : ''}
                         <button class="btn-link save-shortlist-btn" type="button" data-shortlist="${shortlistPayload}">Save to Shortlist</button>
                     </div>
@@ -2222,6 +2361,12 @@ function initFeaturePages() {
     const recommendationsList = document.getElementById('recommendations-list');
     if (recommendationsList) {
         recommendationsList.addEventListener('click', async (event) => {
+            const mapButton = event.target.closest('.focus-map-btn');
+            if (mapButton) {
+                focusMapLocation(mapButton.getAttribute('data-lat'), mapButton.getAttribute('data-lon'));
+                return;
+            }
+
             const compareButton = event.target.closest('.add-compare-btn');
             if (compareButton) {
                 addListingIdToCompare(compareButton.getAttribute('data-id'), true);
