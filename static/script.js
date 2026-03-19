@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     initThemeToggle();
     initAnalyticsModeControls();
+    initAnalyticsSplitter();
     loadStats();
     initMap();
     initForm();
@@ -46,10 +47,13 @@ const WEIGHT_PRESETS = {
 const SAVED_SEARCH_INPUT_IDS = ['analytics-search-name', 'saved-search-name'];
 const THEME_STORAGE_KEY = 'urbanmove-theme';
 const ANALYTICS_MODE_STORAGE_KEY = 'urbanmove-analytics-mode';
+const ANALYTICS_SPLIT_STORAGE_KEY = 'urbanmove-analytics-split';
 const WORK_MAP_STATUS_DEFAULT = 'Paste a pinned map link and the app will read latitude and longitude automatically.';
 const FALLBACK_API_BASES = ['http://127.0.0.1:5000', 'http://localhost:5000'];
+const DEFAULT_ANALYTICS_SPLITS = { classic: 42, glass: 58 };
 let currentTheme = 'dark';
 let resolvedApiBase = null;
+let currentAnalyticsSplits = { ...DEFAULT_ANALYTICS_SPLITS };
 
 function uniqueValues(values) {
     return [...new Set(values.filter((value) => typeof value === 'string' && value.trim()))];
@@ -164,6 +168,29 @@ function writeStoredAnalyticsMode(mode) {
         window.localStorage.setItem(ANALYTICS_MODE_STORAGE_KEY, mode === 'glass' ? 'glass' : 'classic');
     } catch (_err) {
         // Ignore storage failures and keep the session mode only.
+    }
+}
+
+function readStoredAnalyticsSplits() {
+    try {
+        const parsed = JSON.parse(window.localStorage.getItem(ANALYTICS_SPLIT_STORAGE_KEY) || '{}');
+        return {
+            classic: Number.isFinite(Number(parsed.classic)) ? Number(parsed.classic) : DEFAULT_ANALYTICS_SPLITS.classic,
+            glass: Number.isFinite(Number(parsed.glass)) ? Number(parsed.glass) : DEFAULT_ANALYTICS_SPLITS.glass
+        };
+    } catch (_err) {
+        return { ...DEFAULT_ANALYTICS_SPLITS };
+    }
+}
+
+function writeStoredAnalyticsSplits(splits) {
+    try {
+        window.localStorage.setItem(ANALYTICS_SPLIT_STORAGE_KEY, JSON.stringify({
+            classic: splits.classic,
+            glass: splits.glass
+        }));
+    } catch (_err) {
+        // Ignore storage failures and keep the session split only.
     }
 }
 
@@ -292,6 +319,51 @@ function updateAnalyticsModeButtons(mode) {
     });
 }
 
+function getCurrentAnalyticsMode() {
+    const predictSection = document.getElementById('predict');
+    return predictSection?.dataset?.analyticsMode === 'glass' ? 'glass' : 'classic';
+}
+
+function clampAnalyticsSplit(value, mode = getCurrentAnalyticsMode()) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+        return DEFAULT_ANALYTICS_SPLITS[mode] || DEFAULT_ANALYTICS_SPLITS.classic;
+    }
+
+    const limits = mode === 'glass'
+        ? { min: 40, max: 74 }
+        : { min: 30, max: 68 };
+    return Math.max(limits.min, Math.min(limits.max, numeric));
+}
+
+function applyAnalyticsSplit(value, options = {}) {
+    const predictSection = document.getElementById('predict');
+    if (!predictSection) return;
+
+    const mode = options.mode === 'glass' ? 'glass' : (options.mode === 'classic' ? 'classic' : getCurrentAnalyticsMode());
+    const clamped = clampAnalyticsSplit(value, mode);
+    predictSection.style.setProperty('--analytics-form-basis', `${clamped}%`);
+    predictSection.style.setProperty('--analytics-result-basis', `${100 - clamped}%`);
+    currentAnalyticsSplits[mode] = clamped;
+
+    if (options.persist !== false) {
+        writeStoredAnalyticsSplits(currentAnalyticsSplits);
+    }
+}
+
+function updateAnalyticsModeStatus(mode = getCurrentAnalyticsMode()) {
+    const status = document.getElementById('analytics-mode-status');
+    if (!status) return;
+
+    const ratio = currentAnalyticsSplits[mode] || DEFAULT_ANALYTICS_SPLITS[mode] || DEFAULT_ANALYTICS_SPLITS.classic;
+    if (mode === 'glass') {
+        status.textContent = `Glass Cards active. The input cards lead the page with a shaded workspace, and the divider is set to ${Math.round(ratio)}% form width.`;
+        return;
+    }
+
+    status.textContent = `Classic layout active. Drag the divider between input and prediction to resize both sides. Current form width: ${Math.round(ratio)}%.`;
+}
+
 function applyAnalyticsMode(mode, options = {}) {
     const predictSection = document.getElementById('predict');
     if (!predictSection) return;
@@ -299,6 +371,11 @@ function applyAnalyticsMode(mode, options = {}) {
     const normalizedMode = mode === 'glass' ? 'glass' : 'classic';
     predictSection.dataset.analyticsMode = normalizedMode;
     updateAnalyticsModeButtons(normalizedMode);
+    applyAnalyticsSplit(currentAnalyticsSplits[normalizedMode] || DEFAULT_ANALYTICS_SPLITS[normalizedMode], {
+        mode: normalizedMode,
+        persist: options.persist
+    });
+    updateAnalyticsModeStatus(normalizedMode);
 
     if (options.persist !== false) {
         writeStoredAnalyticsMode(normalizedMode);
@@ -306,10 +383,78 @@ function applyAnalyticsMode(mode, options = {}) {
 }
 
 function initAnalyticsModeControls() {
+    currentAnalyticsSplits = readStoredAnalyticsSplits();
     applyAnalyticsMode(readStoredAnalyticsMode(), { persist: false });
 
     document.querySelectorAll('button[data-analytics-mode]').forEach((button) => {
         button.addEventListener('click', () => applyAnalyticsMode(button.dataset.analyticsMode));
+    });
+}
+
+function initAnalyticsSplitter() {
+    const splitter = document.getElementById('analytics-splitter');
+    const layout = document.querySelector('#predict .predict-layout');
+    const predictSection = document.getElementById('predict');
+    if (!splitter || !layout || !predictSection) return;
+
+    let dragging = false;
+
+    const updateFromPointer = (clientX) => {
+        const rect = layout.getBoundingClientRect();
+        if (!rect.width) return;
+        const ratio = ((clientX - rect.left) / rect.width) * 100;
+        applyAnalyticsSplit(ratio);
+        updateAnalyticsModeStatus();
+    };
+
+    const stopDragging = () => {
+        if (!dragging) return;
+        dragging = false;
+        layout.classList.remove('is-resizing');
+        document.body.classList.remove('analytics-resizing');
+    };
+
+    splitter.addEventListener('pointerdown', (event) => {
+        if (window.matchMedia('(max-width: 960px)').matches) return;
+        dragging = true;
+        layout.classList.add('is-resizing');
+        document.body.classList.add('analytics-resizing');
+        splitter.setPointerCapture?.(event.pointerId);
+        updateFromPointer(event.clientX);
+        event.preventDefault();
+    });
+
+    splitter.addEventListener('pointermove', (event) => {
+        if (!dragging) return;
+        updateFromPointer(event.clientX);
+    });
+
+    splitter.addEventListener('pointerup', () => stopDragging());
+    splitter.addEventListener('pointercancel', () => stopDragging());
+    splitter.addEventListener('lostpointercapture', () => stopDragging());
+
+    splitter.addEventListener('keydown', (event) => {
+        const mode = getCurrentAnalyticsMode();
+        const step = event.shiftKey ? 4 : 2;
+        const current = currentAnalyticsSplits[mode] || DEFAULT_ANALYTICS_SPLITS[mode];
+
+        if (event.key === 'ArrowLeft') {
+            applyAnalyticsSplit(current - step, { mode });
+            updateAnalyticsModeStatus(mode);
+            event.preventDefault();
+        }
+
+        if (event.key === 'ArrowRight') {
+            applyAnalyticsSplit(current + step, { mode });
+            updateAnalyticsModeStatus(mode);
+            event.preventDefault();
+        }
+
+        if (event.key === 'Home') {
+            applyAnalyticsSplit(DEFAULT_ANALYTICS_SPLITS[mode], { mode });
+            updateAnalyticsModeStatus(mode);
+            event.preventDefault();
+        }
     });
 }
 

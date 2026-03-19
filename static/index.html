@@ -122,6 +122,7 @@
                             <button class="mode-chip is-active" id="analytics-mode-classic-btn" data-analytics-mode="classic" type="button">Classic</button>
                             <button class="mode-chip" id="analytics-mode-glass-btn" data-analytics-mode="glass" type="button">Glass Cards</button>
                         </div>
+                        <div class="analytics-mode-status" id="analytics-mode-status">Classic layout active. Drag the divider between input and prediction to resize both sides.</div>
                     </div>
                 </div>
                 <div class="predict-layout">
@@ -335,6 +336,10 @@
                             </div>
                             <p class="section-subtitle action-note">Prediction also refreshes best areas, cost breakdown, and related sections automatically.</p>
                         </form>
+                    </div>
+                    <div class="analytics-splitter" id="analytics-splitter" role="separator" aria-label="Resize analytics input and prediction panels" aria-orientation="vertical" tabindex="0">
+                        <span class="analytics-splitter-line"></span>
+                        <span class="analytics-splitter-pill">Resize</span>
                     </div>
                     <div class="result-panel analytics-resizable" id="analytics-result-shell">
                         <div class="decision-overview-container glass panel-hidden" id="decision-overview-box">
