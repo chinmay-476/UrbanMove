@@ -17,8 +17,14 @@
     <div class="app-container">
         <!-- Sidebar -->
         <aside class="sidebar glass">
-            <div class="logo">
-                <h2>Urban<span class="highlight">Move</span></h2>
+            <div class="sidebar-head">
+                <div class="logo">
+                    <h2>Urban<span class="highlight">Move</span></h2>
+                </div>
+                <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false" aria-label="Switch theme">
+                    <span class="theme-toggle-icon" aria-hidden="true"></span>
+                    <span class="theme-toggle-text">Dark mode</span>
+                </button>
             </div>
             <nav>
                 <a href="#" class="nav-item active" onclick="showSection('dashboard')">
@@ -38,6 +44,9 @@
                 </a>
                 <a href="#" class="nav-item" onclick="showSection('score-view')">
                     <span class="icon">🏙️</span> Locality Scorecard
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('planner-view')">
+                    <span class="icon">🗂</span> My Planner
                 </a>
             </nav>
         </aside>
@@ -84,7 +93,7 @@
                 <header>
                     <h1>Spatial Analysis</h1>
                     <p class="subtitle">Clustering & Affordability Heatmap</p>
-                    <p class="subtitle" style="font-size: 0.85rem; margin-top: 0.25rem;">
+                    <p class="subtitle map-tip">
                         Tip: Click anywhere on the map or on a marker to open that exact location in Google Maps.
                     </p>
                 </header>
@@ -94,64 +103,59 @@
             </section>
 
             <!-- Prediction Section -->
-            <section id="predict" class="view-section">
+            <section id="predict" class="view-section" data-analytics-mode="classic">
                 <header>
                     <h1>UrbanMove Rent Analytics</h1>
-                    <p class="subtitle">Estimate fair market rent using a data-driven Random Forest model</p>
+                    <p class="subtitle">A simple renter flow first, with advanced controls available when you need them.</p>
                 </header>
+                <div class="predict-intro glass analytics-intro-shell">
+                    <div>
+                        <h3>Simple client flow</h3>
+                        <p class="section-subtitle">1. Choose city, budget, BHK, and work city. 2. Click Predict Rent. 3. Review the recommended areas and total cost.</p>
+                    </div>
+                    <div class="analytics-mode-box">
+                        <div>
+                            <h3>View mode</h3>
+                            <p class="section-subtitle">Classic keeps the usual layout and adds resize handles. Glass Cards splits the analytics inputs into clearer step cards.</p>
+                        </div>
+                        <div class="analytics-mode-switch" role="group" aria-label="Analytics view mode">
+                            <button class="mode-chip is-active" id="analytics-mode-classic-btn" data-analytics-mode="classic" type="button">Classic</button>
+                            <button class="mode-chip" id="analytics-mode-glass-btn" data-analytics-mode="glass" type="button">Glass Cards</button>
+                        </div>
+                    </div>
+                </div>
                 <div class="predict-layout">
-                    <div class="form-container glass">
+                    <div class="form-container glass analytics-resizable" id="analytics-form-shell">
                         <form id="predict-form">
-                            <div class="form-group">
-                                <label>City</label>
-                                <select id="city" name="city" required>
-                                    <option value="Mumbai">Mumbai</option>
-                                    <option value="Bangalore">Bangalore</option>
-                                    <option value="Delhi">Delhi</option>
-                                    <option value="Kolkata">Kolkata</option>
-                                    <option value="Chennai">Chennai</option>
-                                    <option value="Hyderabad">Hyderabad</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Area Locality (Optional)</label>
-                                <input type="text" id="locality" name="locality" placeholder="e.g., Bandra, Andheri">
+                            <div class="form-step-card">
+                            <div class="form-section form-section-top">
+                                <h3>Start Here</h3>
+                                <p class="section-subtitle">These are the only inputs most users need for a first answer.</p>
                             </div>
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label>BHK</label>
+                                    <label for="city">City</label>
+                                    <select id="city" name="city" required>
+                                        <option value="Mumbai">Mumbai</option>
+                                        <option value="Bangalore">Bangalore</option>
+                                        <option value="Delhi">Delhi</option>
+                                        <option value="Kolkata">Kolkata</option>
+                                        <option value="Chennai">Chennai</option>
+                                        <option value="Hyderabad">Hyderabad</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="budget_target">Budget Target</label>
+                                    <input type="number" id="budget_target" value="35000" min="1000" step="500" placeholder="Monthly budget">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="bhk">BHK</label>
                                     <input type="number" id="bhk" name="bhk" value="2" min="1" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Size (sqft)</label>
-                                    <input type="number" id="size" name="size" value="850" min="100" required>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Bathrooms</label>
-                                    <input type="number" id="bathroom" name="bathroom" value="2" min="1" required>
-                                </div>
-                                <div class="form-group">
-                                    <label>Area Type</label>
-                                    <select id="area_type" name="area_type" required>
-                                        <option value="Super Area">Super Area</option>
-                                        <option value="Carpet Area">Carpet Area</option>
-                                        <option value="Built Area">Built Area</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label>Furnishing</label>
-                                    <select id="furnishing" name="furnishing" required>
-                                        <option value="Semi-Furnished">Semi-Furnished</option>
-                                        <option value="Unfurnished">Unfurnished</option>
-                                        <option value="Furnished">Furnished</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label>Tenant Preferred</label>
+                                    <label for="tenant">Tenant Type</label>
                                     <select id="tenant" name="tenant" required>
                                         <option value="Bachelors/Family">Bachelors/Family</option>
                                         <option value="Bachelors">Bachelors</option>
@@ -160,64 +164,263 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label>Bathroom Type</label>
-                                <select id="bathroom_type" name="bathroom_type" required>
-                                    <option value="Standard">Standard</option>
-                                    <option value="Attached">Attached</option>
-                                    <option value="Common">Common</option>
-                                    <option value="En-suite">En-suite</option>
-                                </select>
+                                <label for="work_city">Work City</label>
+                                <input type="text" id="work_city" placeholder="Defaults to selected city">
                             </div>
-                            <button type="submit" class="btn-primary">Predict Rent</button>
+                            </div>
+                            <div class="form-step-card form-step-card-optional">
+                            <div class="quick-helper">
+                                <strong>Default mode:</strong> the app already uses common property, cost, and ranking assumptions. Open more preferences only if you want to fine-tune the recommendation.
+                            </div>
+                            <div class="preference-cta-row">
+                                <button type="button" class="btn-link" id="preferences-open-btn">Continue to Preferences</button>
+                                <button type="button" class="btn-link subtle-btn-link" id="preferences-skip-btn">Skip for now</button>
+                            </div>
+                            <div class="mini-status preference-flow-status" id="preferences-flow-status">Skip keeps the default assumptions. Continue opens the optional settings cards.</div>
+                            <details class="advanced-panel advanced-panel-main" id="advanced-options-panel">
+                                <summary>
+                                    <span>More Preferences</span>
+                                    <small>Optional. Most users can leave this closed.</small>
+                                </summary>
+                                <div class="advanced-panel-body advanced-options-grid">
+                                    <section class="advanced-group">
+                                        <div class="advanced-group-head">
+                                            <div>
+                                                <h4>Home Details</h4>
+                                                <p class="section-subtitle">Use these only when the default home assumptions do not match the renter.</p>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="locality">Area Locality (Optional)</label>
+                                            <input type="text" id="locality" name="locality" placeholder="e.g., Bandra, Andheri">
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="size">Size (sqft)</label>
+                                                <input type="number" id="size" name="size" value="850" min="100" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="bathroom">Bathrooms</label>
+                                                <input type="number" id="bathroom" name="bathroom" value="2" min="1" required>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="area_type">Area Type</label>
+                                                <select id="area_type" name="area_type" required>
+                                                    <option value="Super Area">Super Area</option>
+                                                    <option value="Carpet Area">Carpet Area</option>
+                                                    <option value="Built Area">Built Area</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="furnishing">Furnishing</label>
+                                                <select id="furnishing" name="furnishing" required>
+                                                    <option value="Semi-Furnished">Semi-Furnished</option>
+                                                    <option value="Unfurnished">Unfurnished</option>
+                                                    <option value="Furnished">Furnished</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="bathroom_type">Bathroom Type</label>
+                                            <select id="bathroom_type" name="bathroom_type" required>
+                                                <option value="Standard">Standard</option>
+                                                <option value="Attached">Attached</option>
+                                                <option value="Common">Common</option>
+                                                <option value="En-suite">En-suite</option>
+                                            </select>
+                                        </div>
+                                    </section>
+                                    <section class="advanced-group">
+                                        <div class="advanced-group-head">
+                                            <div>
+                                                <h4>Cost Preferences</h4>
+                                                <p class="section-subtitle">Update deposits and monthly extras only if the deal has special terms.</p>
+                                            </div>
+                                            <button type="button" class="btn-link preset-btn" id="reset-costs-btn">Use Default Cost Plan</button>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="deposit_months">Deposit (months)</label>
+                                                <input type="number" id="deposit_months" value="2" min="0" step="0.5">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="brokerage_months">Brokerage (months)</label>
+                                                <input type="number" id="brokerage_months" value="1" min="0" step="0.5">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="maintenance">Maintenance</label>
+                                                <input type="number" id="maintenance" value="2500" min="0" step="100">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="utilities">Utilities</label>
+                                                <input type="number" id="utilities" value="3000" min="0" step="100">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="parking">Parking</label>
+                                                <input type="number" id="parking" value="1500" min="0" step="100">
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="moving_cost">Moving Cost</label>
+                                                <input type="number" id="moving_cost" value="8000" min="0" step="500">
+                                            </div>
+                                        </div>
+                                    </section>
+                                    <section class="advanced-group">
+                                        <div class="advanced-group-head">
+                                            <div>
+                                                <h4>Lifestyle Priorities</h4>
+                                                <p class="section-subtitle">Use presets first. Touch the sliders only when you want a custom ranking order.</p>
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="has_pet">Has Pet</label>
+                                                <select id="has_pet">
+                                                    <option value="false" selected>No</option>
+                                                    <option value="true">Yes</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group">
+                                                <label>Preset</label>
+                                                <div class="preset-row">
+                                                    <button type="button" class="btn-link preset-btn" data-preset="balanced">Balanced</button>
+                                                    <button type="button" class="btn-link preset-btn" data-preset="budget">Budget First</button>
+                                                    <button type="button" class="btn-link preset-btn" data-preset="commute">Commute First</button>
+                                                    <button type="button" class="btn-link preset-btn" data-preset="family">Family First</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="work_map_url">Workplace Map URL (optional)</label>
+                                            <input type="url" id="work_map_url" placeholder="Paste a Google Maps or OpenStreetMap link">
+                                            <div id="work-map-status" class="mini-status">Paste a pinned map link and the app will read latitude and longitude automatically.</div>
+                                            <input type="hidden" id="work_lat">
+                                            <input type="hidden" id="work_lon">
+                                        </div>
+                                        <div class="range-grid">
+                                            <div class="range-group">
+                                                <label for="cost_weight">Cost Weight <span id="cost_weight_value">35</span></label>
+                                                <input type="range" id="cost_weight" min="0" max="100" value="35">
+                                            </div>
+                                            <div class="range-group">
+                                                <label for="commute_weight">Commute Weight <span id="commute_weight_value">15</span></label>
+                                                <input type="range" id="commute_weight" min="0" max="100" value="15">
+                                            </div>
+                                            <div class="range-group">
+                                                <label for="safety_weight">Safety Weight <span id="safety_weight_value">20</span></label>
+                                                <input type="range" id="safety_weight" min="0" max="100" value="20">
+                                            </div>
+                                            <div class="range-group">
+                                                <label for="transit_weight">Transit Weight <span id="transit_weight_value">15</span></label>
+                                                <input type="range" id="transit_weight" min="0" max="100" value="15">
+                                            </div>
+                                            <div class="range-group">
+                                                <label for="amenity_weight">Amenity Weight <span id="amenity_weight_value">15</span></label>
+                                                <input type="range" id="amenity_weight" min="0" max="100" value="15">
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+                            </details>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn-primary" id="predict-submit-btn">Predict Rent</button>
+                                <button type="button" class="btn-secondary" id="analytics-reset-btn">Reset Form</button>
+                            </div>
+                            <p class="section-subtitle action-note">Prediction also refreshes best areas, cost breakdown, and related sections automatically.</p>
                         </form>
                     </div>
-                    <div class="result-panel">
-                        <div class="result-container glass" id="result-box" style="display:none;">
-                            <h3>Estimated Rent</h3>
+                    <div class="result-panel analytics-resizable" id="analytics-result-shell">
+                        <div class="decision-overview-container glass panel-hidden" id="decision-overview-box">
+                            <div class="recommendations-header">
+                                <h3>Quick Decision View</h3>
+                                <p class="subtitle small">This is the easiest client-ready summary to present first.</p>
+                            </div>
+                            <div id="decision-overview-content"></div>
+                        </div>
+                        <div class="analytics-actions glass panel-hidden" id="analytics-actions-box">
+                            <div class="recommendations-header analytics-actions-head">
+                                <h3>Continue With This Plan</h3>
+                                <p class="subtitle small">Save this search here or open the next section with the same city, BHK, locality, budget, and preferences already connected.</p>
+                            </div>
+                            <div class="mini-form-row analytics-save-row">
+                                <input type="text" id="analytics-search-name" aria-label="Analytics search name" placeholder="Optional search name">
+                                <button class="btn-primary mini-btn" id="analytics-save-search-btn" type="button">Save This Search</button>
+                            </div>
+                            <div id="analytics-search-status" class="mini-status analytics-search-status"></div>
+                            <div class="analytics-link-grid">
+                                <button class="btn-link" id="analytics-open-trends-btn" type="button">Open Trends</button>
+                                <button class="btn-link" id="analytics-open-compare-btn" type="button">Compare Homes</button>
+                                <button class="btn-link" id="analytics-open-score-btn" type="button">Open Scorecard</button>
+                                <button class="btn-link" id="analytics-open-planner-btn" type="button">Open Planner</button>
+                            </div>
+                            <p class="section-subtitle">The lower sections reuse the current plan automatically, so users do not need to fill the same details again.</p>
+                        </div>
+                        <div class="result-container glass panel-hidden" id="result-box">
+                            <h3>Expected Rent</h3>
                             <div class="price" id="prediction-result">Rs 0</div>
-                            <p class="disclaimer">Based on historical market data.</p>
+                            <p class="disclaimer">Use this as the negotiation reference for the selected configuration.</p>
+                            <p class="subtitle small" id="lab-confidence"></p>
                         </div>
-                        <div class="market-insights-container glass" id="market-insights-box" style="display:none;">
+                        <div class="cost-breakdown-container glass panel-hidden" id="cost-breakdown-box">
                             <div class="recommendations-header">
-                                <h3>Market Position</h3>
-                                <p class="subtitle small">How your estimate compares with similar listings.</p>
+                                <h3>Total Cost Breakdown</h3>
+                                <p class="subtitle small">Upfront move-in cash plus recurring monthly carry cost.</p>
                             </div>
-                            <div id="market-insights-content"></div>
+                            <div id="cost-breakdown-content"></div>
                         </div>
-                        <div class="trend-forecast-container glass" id="trend-forecast-box" style="display:none;">
-                            <div class="trend-forecast-head">
-                                <div>
-                                    <h3>Rent Trend Forecast</h3>
-                                    <p class="subtitle small">Monthly trend + short-term forecast for your selected market.</p>
+                        <div class="recommendations-container glass panel-hidden" id="recommendations-box">
+                            <div class="recommendations-header">
+                                <h3>Personalized Locality Matches</h3>
+                                <p class="subtitle small">Ranked by cost, commute, safety, transit, and amenity fit. Classic keeps a tighter list, while Glass Cards adds clearer spacing.</p>
+                            </div>
+                            <div id="recommendations-list" class="analytics-resizable"></div>
+                        </div>
+                        <details class="insight-drawer panel-hidden" id="secondary-insights-box">
+                            <summary>More Market Details</summary>
+                            <div class="insight-drawer-body">
+                                <div class="budget-advisor-container glass panel-hidden" id="budget-advisor-box">
+                                    <div class="recommendations-header">
+                                        <h3>Budget Fit Alternatives</h3>
+                                        <p class="subtitle small">Useful when the predicted deal rent is above target and you need fast fallback options.</p>
+                                    </div>
+                                    <div id="budget-advisor-list"></div>
                                 </div>
-                                <div class="trend-controls">
-                                    <label for="trend-horizon">Horizon</label>
-                                    <select id="trend-horizon">
-                                        <option value="3">3M</option>
-                                        <option value="6" selected>6M</option>
-                                        <option value="12">12M</option>
-                                    </select>
+                                <div class="market-insights-container glass panel-hidden" id="market-insights-box">
+                                    <div class="recommendations-header">
+                                        <h3>Market Position</h3>
+                                        <p class="subtitle small">Useful after the main recommendation, or when clients ask why the rent is reasonable.</p>
+                                    </div>
+                                    <div id="market-insights-content"></div>
+                                </div>
+                                <div class="trend-forecast-container glass panel-hidden" id="trend-forecast-box">
+                                    <div class="trend-forecast-head">
+                                        <div>
+                                            <h3>Rent Trend Forecast</h3>
+                                            <p class="subtitle small">Optional supporting view if the client wants future trend context.</p>
+                                        </div>
+                                        <div class="trend-controls">
+                                            <label for="trend-horizon">Horizon</label>
+                                            <select id="trend-horizon" aria-label="Forecast horizon">
+                                                <option value="3">3M</option>
+                                                <option value="6" selected>6M</option>
+                                                <option value="12">12M</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="trend-forecast-summary" id="trend-forecast-summary"></div>
+                                    <div class="trend-chart-wrap">
+                                        <canvas id="trendForecastChart"></canvas>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="trend-forecast-summary" id="trend-forecast-summary"></div>
-                            <div class="trend-chart-wrap">
-                                <canvas id="trendForecastChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="recommendations-container glass" id="recommendations-box" style="display:none;">
-                            <div class="recommendations-header">
-                                <h3>Suggested Locations</h3>
-                                <p class="subtitle small">Based on your preferences and predicted rent.</p>
-                            </div>
-                            <div id="recommendations-list"></div>
-                        </div>
-                        <div class="budget-advisor-container glass" id="budget-advisor-box" style="display:none;">
-                            <div class="recommendations-header">
-                                <h3>Budget Advisor</h3>
-                                <p class="subtitle small">Top localities ranked by budget fit and livability.</p>
-                            </div>
-                            <div id="budget-advisor-list"></div>
-                        </div>
+                        </details>
                     </div>
                 </div>
             </section>
@@ -225,19 +428,23 @@
             <section id="trnd-view" class="view-section">
                 <header>
                     <h1>Trends & Forecast</h1>
-                    <p class="subtitle">City/locality rent trend chart with 3/6/12 month forecast.</p>
+                    <p class="subtitle">Simple rent trend view. Use your current plan if you do not want to fill filters again.</p>
                 </header>
                 <div class="glass page-block">
+                    <div class="section-helper">
+                        <button class="btn-link" id="trnd-use-current-btn" type="button">Use Current Rent Plan</button>
+                        <div class="mini-status">This copies the city, BHK, and locality from the main Rent Analytics flow.</div>
+                    </div>
                     <div class="mini-form-row">
-                        <input type="text" id="trnd-city" placeholder="City (e.g., Mumbai)">
-                        <input type="number" id="trnd-bhk" min="1" value="2" placeholder="BHK">
-                        <input type="text" id="trnd-locality" placeholder="Locality (optional)">
-                        <select id="trnd-horizon">
+                        <input type="text" id="trnd-city" aria-label="Trend city" placeholder="City (e.g., Mumbai)">
+                        <input type="number" id="trnd-bhk" aria-label="Trend BHK" min="1" value="2" placeholder="BHK">
+                        <input type="text" id="trnd-locality" aria-label="Trend locality" placeholder="Locality (optional)">
+                        <select id="trnd-horizon" aria-label="Trend horizon">
                             <option value="3">3M</option>
                             <option value="6" selected>6M</option>
                             <option value="12">12M</option>
                         </select>
-                        <button class="btn-primary mini-btn" id="trnd-load-btn">Load Trend</button>
+                        <button class="btn-primary mini-btn" id="trnd-load-btn" type="button">Load Trend</button>
                     </div>
                     <div id="trnd-summary" class="mini-status"></div>
                     <div class="trend-chart-wrap page-chart">
@@ -249,12 +456,16 @@
             <section id="comp-view" class="view-section">
                 <header>
                     <h1>Compare Listings</h1>
-                    <p class="subtitle">Compare selected listing IDs side by side.</p>
+                    <p class="subtitle">Use quick buttons from recommendations or shortlist. Manual IDs are optional.</p>
                 </header>
                 <div class="glass page-block">
+                    <div class="section-helper">
+                        <button class="btn-link" id="compare-top-btn" type="button">Compare Top Matches</button>
+                        <button class="btn-link" id="compare-shortlist-fill-btn" type="button">Compare Shortlist</button>
+                    </div>
                     <div class="mini-form-row">
-                        <input type="text" id="compare-ids" placeholder="IDs, e.g., 1,5,12">
-                        <button class="btn-primary mini-btn" id="compare-load-btn">Compare</button>
+                        <input type="text" id="compare-ids" aria-label="Listing IDs to compare" placeholder="Filled automatically when you use the quick buttons">
+                        <button class="btn-primary mini-btn" id="compare-load-btn" type="button">Compare</button>
                     </div>
                     <div id="compare-summary" class="mini-status"></div>
                     <div id="compare-result" class="result-list"></div>
@@ -264,15 +475,68 @@
             <section id="score-view" class="view-section">
                 <header>
                     <h1>Locality Scorecard</h1>
-                    <p class="subtitle">Rank localities by affordability, livability, trend proxy, and demand.</p>
+                    <p class="subtitle">Simple area ranking for the selected city and home size.</p>
                 </header>
                 <div class="glass page-block">
+                    <div class="section-helper">
+                        <button class="btn-link" id="score-use-current-btn" type="button">Use Current Rent Plan</button>
+                        <div class="mini-status">This keeps the current city and BHK so users do not have to re-enter them.</div>
+                    </div>
                     <div class="mini-form-row">
-                        <input type="text" id="score-city" placeholder="City (optional)">
-                        <input type="number" id="score-bhk" min="1" value="2" placeholder="BHK">
-                        <button class="btn-primary mini-btn" id="score-load-btn">Load Scorecard</button>
+                        <input type="text" id="score-city" aria-label="Scorecard city" placeholder="City (optional)">
+                        <input type="number" id="score-bhk" aria-label="Scorecard BHK" min="1" value="2" placeholder="BHK">
+                        <button class="btn-primary mini-btn" id="score-load-btn" type="button">Load Scorecard</button>
                     </div>
                     <div id="score-result" class="result-list"></div>
+                </div>
+            </section>
+
+            <section id="planner-view" class="view-section">
+                <header>
+                    <h1>My Planner</h1>
+                    <p class="subtitle">Persist shortlist entries, saved searches, and actual-deal feedback locally.</p>
+                </header>
+                <div class="planner-grid">
+                    <div class="glass page-block">
+                        <div class="section-row">
+                            <div>
+                                <h3>Shortlist</h3>
+                                <p class="subtitle small">Saved recommendations and listings you want to revisit.</p>
+                            </div>
+                            <button class="btn-link" id="planner-refresh-btn" type="button">Refresh</button>
+                        </div>
+                        <div id="shortlist-result" class="result-list"></div>
+                    </div>
+
+                    <div class="glass page-block">
+                        <div>
+                            <h3>Saved Searches</h3>
+                            <p class="subtitle small">Store the current prediction form and preference settings.</p>
+                        </div>
+                        <div class="mini-form-row">
+                            <input type="text" id="saved-search-name" aria-label="Saved search name" placeholder="Search name">
+                            <button class="btn-primary mini-btn" id="save-search-btn" type="button">Save Current Search</button>
+                        </div>
+                        <div id="saved-search-status" class="mini-status"></div>
+                        <div id="saved-search-result" class="result-list"></div>
+                    </div>
+
+                    <div class="glass page-block">
+                        <div>
+                            <h3>Prediction Feedback</h3>
+                            <p class="subtitle small">Capture the actual agreed rent for future model review.</p>
+                        </div>
+                        <div class="mini-form-row">
+                            <input type="number" id="feedback-predicted" aria-label="Predicted rent" placeholder="Predicted rent" min="0">
+                            <input type="number" id="feedback-actual" aria-label="Actual agreed rent" placeholder="Actual agreed rent" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="feedback-text">Notes</label>
+                            <textarea id="feedback-text" rows="4" placeholder="Negotiation outcome, hidden charges, final terms"></textarea>
+                        </div>
+                        <button class="btn-primary mini-btn" id="feedback-save-btn" type="button">Save Feedback</button>
+                        <div id="feedback-status" class="mini-status"></div>
+                    </div>
                 </div>
             </section>
         </main>

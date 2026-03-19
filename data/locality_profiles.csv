@@ -1,0 +1,19 @@
+city,locality,transit_score,safety_score,school_score,hospital_score,grocery_score,parking_score,flood_risk_score,noise_score,family_score,bachelor_score,pet_score,notes
+Mumbai,Bandra West,9,8,8,8,9,5,4,7,8,8,6,Strong social infrastructure and premium demand.
+Mumbai,Chembur,8,7,8,8,8,6,5,6,8,7,7,Balanced family access with improving connectivity.
+Mumbai,Andheri West,9,7,7,8,9,4,5,8,7,9,5,Popular mixed-use market with strong entertainment access.
+Bangalore,Electronic City,7,7,6,7,7,8,4,5,7,8,7,Tech corridor with better parking and budget fit.
+Bangalore,K R Puram,7,6,7,7,7,7,5,6,7,7,6,Useful for commuters heading to east Bangalore hubs.
+Bangalore,Whitefield,8,7,8,8,8,6,4,7,8,8,7,Large office catchment with strong retail support.
+Chennai,Velachery,8,7,8,8,8,5,5,7,7,8,6,Dense residential zone with solid transit and retail mix.
+Chennai,Medavakkam,6,7,7,7,7,7,4,5,8,7,7,Budget-friendly family area with growing services.
+Chennai,Sholinganallur,8,7,7,8,8,6,4,6,7,8,6,IT corridor locality with good daily convenience.
+Delhi,Laxmi Nagar,8,6,7,7,8,4,5,8,6,8,5,High access area with dense market activity.
+Delhi,Saket,9,8,9,9,8,5,4,6,9,7,6,Premium south Delhi option with strong institutions.
+Delhi,Vasant Kunj,7,8,8,8,7,7,4,5,9,6,7,Planned residential area with strong family appeal.
+Hyderabad,Gachibowli,9,8,8,8,8,6,4,6,8,9,7,Strong office connectivity and modern amenities.
+Hyderabad,Kondapur,8,7,7,8,8,6,4,6,8,8,7,Well-rounded option near the western tech belt.
+Hyderabad,Jubilee Hills,8,9,9,9,8,6,3,5,9,7,6,High-safety premium micro-market.
+Kolkata,Salt Lake City Sector 2,8,8,8,8,7,7,4,5,8,7,7,Planned neighborhood with strong civic structure.
+Kolkata,Salt Lake City Sector 5,9,7,6,7,8,5,4,7,6,9,5,Commercial hub with better transit than parking.
+Kolkata,Behala,6,6,7,7,7,6,5,5,7,6,7,Affordable established residential zone.

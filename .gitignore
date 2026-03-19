@@ -8,5 +8,11 @@ __pycache__/
 .vscode/
 .idea/
 
+instance/
+tmp*/
+model_artifacts/alerts.json
+model_artifacts/model_metrics_history.json
+model_artifacts/*.backup
+
 Thumbs.db
 .DS_Store

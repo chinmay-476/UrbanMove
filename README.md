@@ -1,120 +1,96 @@
-# Urban Rental Decision Support System
+# UrbanMove: Rental Analytics and Decision Support System
+
+UrbanMove is a Flask-based web application that helps renters make practical housing decisions using market data, machine learning, and a simple decision-support interface.
 
 ## Problem Statement
-Decisions related to rental housing in metropolitan cities have become increasingly complex due to rapid urban migration, fluctuating rental prices, and varying neighborhood livability. Potential tenants lack a unified, data-driven platform to assess affordability, compare neighborhood amenities, and predict fair rental prices, leading to information asymmetry and suboptimal housing choices.
+
+Rental decisions in metropolitan cities are difficult because users must balance budget, property features, commute, and neighborhood quality without a single reliable reference point. This project addresses that gap by combining rent prediction, locality analysis, trend context, and listing comparison in one workflow.
 
 ## Project Objectives
-1.  **Data Integration**: Aggregating and processing rental housing data to clean, normalize, and enrich it with geospatial and amenity attributes.
-2.  **Predictive Modeling**: Developing machine learning models to estimate fair rental prices based on property features and location.
-3.  **Neighborhood Analysis**: identifying "Affordability Zones" and evaluating neighborhood livability using spatial clustering techniques.
-4.  **Decision Support Interface**: Providing an interactive web-based dashboard for users to visualize market trends, explore location data, and receive personalized rent estimates.
 
-## High-Level Scope
+1. Clean and enrich rental housing data for analysis and prediction.
+2. Predict fair rent values from property and location attributes.
+3. Recommend localities using affordability, livability, and commute context.
+4. Provide a web interface that remains usable for non-technical users.
 
-### In-Scope Features
-*   **Data Processing Pipeline**:
-    *   Cleaning and preprocessing of raw CSV dataset (handling missing values, date normalization).
-    *   Feature engineering (e.g., `Bathroom_Type`, generic `Livability_Score`).
-    *   Synthetic data generation for missing geospatial coordinates (Lat/Lon).
-*   **Machine Learning Module**:
-    *   **Price Prediction**: Random Forest Regressor to predict rent based on BHK, Size, Area Type, City, etc.
-    *   **Clustering**: K-Means clustering to categorize neighborhoods into affordability/livability zones.
-    *   **EDA**: Automated generation of key statistical insights (e.g., Rent distribution by City).
-*   **Web Application**:
-    *   **Backend**: Flask-based REST API to serve model predictions and analytics data.
-    *   **Frontend**: Responsive HTML/CSS/JS interface with a "Premium/Dark Mode" design.
-    *   **Interactive Map**: Leaflet.js map visualizing property clusters and zones.
-    *   **Dashboard**: Chart.js visualizations for market insights.
-    *   **Prediction Tool**: User-friendly form for real-time rent estimation.
+## Current Feature Set
 
-### Out-of-Scope Features
-*   Real-time data scraping from live real estate websites.
-*   User authentication, user profiles, or save functionality.
-*   Direct integration with payment gateways or landlord contact systems.
-*   Mobile application (iOS/Android native).
-*   Advanced NLP analysis of listing descriptions.
+- Dashboard with city-level market statistics and charts.
+- Map exploration with listing clusters.
+- Rent Analytics flow with prediction, confidence range, market position, budget guidance, and locality recommendations.
+- Trends and forecast view for short-term rent direction.
+- Compare Listings for side-by-side property review.
+- Locality Scorecard for ranked locality summaries.
+- Saved searches, shortlist storage, and prediction feedback using SQLite.
+- Listing freshness and contact-type indicators.
+- Light and dark theme toggle.
+- Workplace map URL input that extracts coordinates instead of asking users for raw latitude and longitude.
+
+## Architecture Snapshot
+
+- Frontend: HTML, CSS, Vanilla JavaScript, Chart.js, Leaflet.
+- Backend: Python, Flask, Flask-CORS.
+- ML layer: scikit-learn Random Forest for rent prediction and K-Means for clustering.
+- Data layer: CSV-based rental dataset, model artifacts in `model_artifacts/`, and SQLite for local user actions.
 
 ## Repository Structure
+
 ```text
 .
 |-- app.py
-|-- requirements.txt
 |-- Cleaned_House_Rent_Dataset.csv
+|-- data/
+|-- docs/
+|-- instance/
 |-- model_artifacts/
-|-- static/
 |-- scripts/
-|   |-- preprocess_data.py
-|   |-- train_models.py
-|   `-- version_debug.py
-`-- docs/
-    |-- ARCHITECTURE.md
-    |-- DIAGRAM_EXPORT.md
-    |-- PPT_OUTLINE.md
-    |-- SCHEMA.md
-    |-- SPEAKER_NOTES.md
-    `-- USER_STORIES.md
+|-- static/
+|-- tests/
+`-- requirements.txt
 ```
 
 ## Run Locally
+
 1. Create and activate a virtual environment.
 2. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
-3. (Optional) Rebuild processed data and models:
+
+3. Regenerate model artifacts if needed:
+
    ```bash
    python scripts/preprocess_data.py
    python scripts/train_models.py
    ```
+
 4. Start the app:
+
    ```bash
    python app.py
    ```
 
-## How To Use (Page by Page)
-1. `📊 Dashboard`
-   - Opens by default and shows market KPIs.
-   - Hover bars in the city chart to see city-wise average rent in the stat card.
+5. Open `http://127.0.0.1:5000`.
 
-2. `🗺️ Map Explore`
-   - Explore listing clusters and heat layer.
-   - Click anywhere on the map or a marker to open that location in Google Maps.
+## Verification
 
-3. `💡 Rent Analytics`
-   - Fill `City`, `BHK`, `Size`, `Bathrooms`, furnishing details, then click `Predict Rent`.
-   - After prediction, the right panel auto-loads:
-   - confidence range (low/expected/high),
-   - market position,
-   - trend forecast,
-   - suggested locations,
-   - budget advisor.
-   - On desktop, form stays fixed and result cards are independently scrollable.
+Run these checks before submission or demo:
 
-4. `📈 Trends & Forecast`
-   - Enter city/locality filters and forecast horizon (`3M/6M/12M`).
-   - Click `Load Trend` to view historical median trend and projected curve.
-
-5. `📋 Compare Listings`
-   - Enter comma-separated listing IDs (example: `1,5,12`).
-   - Click `Compare` for side-by-side summary.
-
-6. `🏙️ Locality Scorecard`
-   - Set city and BHK.
-   - Click `Load Scorecard` to rank localities by affordability, livability, trend proxy, and demand.
-
-Advanced pages (`Alerts`, `Similar Homes`, `Price Intelligence`, `Commute Planner`, and `Model Lab`) are intentionally hidden from the UI for a simpler workflow.
-
-## Functionality Smoke Test
-Run this to verify all APIs after changes:
 ```bash
 python -m py_compile app.py
 node --check static/script.js
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
-For endpoint checks, use Flask `test_client` to call:
-`/api/stats`, `/api/properties`, `/api/map_data`, `/api/properties/<id>`, `/api/cities`,
-`/api/budget_advisor`, `/api/market_insights`, `/api/rent_trends`, `/api/predict`,
-`/api/what_if`, `/api/similar_listings`, `/api/price_intelligence`,
-`/api/locality_scorecard`, `/api/commute_advisor`, `/api/explain_prediction`,
-`/api/model_monitoring`, `/api/retrain_pipeline`, `/api/alerts`,
-`/api/alerts/check`, `/api/compare_listings`.
+## Presentation and Submission Docs
+
+- PPT outline: `docs/PPT_OUTLINE.md`
+- Speaker notes: `docs/SPEAKER_NOTES.md`
+- Architecture summary: `docs/ARCHITECTURE.md`
+- Final submission and demo checklist: `docs/FINAL_SUBMISSION_CHECKLIST.md`
+
+## Notes
+
+- Model artifacts have been retrained in the current environment to avoid scikit-learn version mismatch warnings during normal verification.
+- The app is intentionally focused on a guided rental decision workflow rather than account management or live web scraping.

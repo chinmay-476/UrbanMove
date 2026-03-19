@@ -1,157 +1,106 @@
-# Urban Rental Decision Support System — PPT Outline
+# UrbanMove: Rental Analytics and Decision Support System - PPT Outline
 
-Copy each slide block into PowerPoint or Google Slides. Use slide titles as heading and bullets as content.
-
----
+Copy each slide title and bullet list into PowerPoint or Google Slides.
 
 ## Slide 1: Title
 
-**Urban Rental Decision Support System**
-
-- Data-Driven Rent Estimation & Neighborhood Analysis
-- [Your name]
-- [Course / 6th Semester]
-- [Date]
-
----
+- UrbanMove: Rental Analytics and Decision Support System
+- Final Year Minor Project
+- Team members
+- Guide name
+- Department / Semester / Date
 
 ## Slide 2: Problem Statement
 
-**Problem Statement**
-
-- Rental housing decisions in metropolitan cities are increasingly complex (rapid urban migration, fluctuating prices, varying livability).
-- Tenants lack a unified, data-driven platform to assess affordability, compare neighborhoods, and predict fair rent.
-- This leads to information asymmetry and suboptimal housing choices.
-
----
+- Rental decisions in metro cities are affected by price variation, locality quality, and commute constraints.
+- Most users do not have one system that combines fair rent estimation with locality comparison.
+- This creates information asymmetry and poor decision making.
 
 ## Slide 3: Project Objectives
 
-**Project Objectives (4 Pillars)**
+- Build a cleaned rental data pipeline.
+- Predict fair rent from property features.
+- Rank localities using affordability and livability factors.
+- Provide a simple web interface for non-technical users.
 
-1. **Data Integration** — Clean, normalize, and enrich rental data with geospatial and amenity attributes.
-2. **Predictive Modeling** — Build ML models to estimate fair rent from property features and location.
-3. **Neighborhood Analysis** — Identify "Affordability Zones" and evaluate livability using spatial clustering.
-4. **Decision Support Interface** — Provide an interactive web dashboard for trends, map exploration, and rent estimates.
+## Slide 4: Dataset and Preprocessing
 
----
+- Source rental dataset cleaned and normalized.
+- Missing values handled and useful derived columns created.
+- Listing dates refreshed for freshness analysis.
+- Locality profile data added for richer recommendation logic.
 
-## Slide 4: High-Level Architecture
+## Slide 5: Machine Learning Approach
 
-**High-Level Architecture**
+- Random Forest Regressor for rent prediction.
+- K-Means clustering for area grouping and map visualization.
+- Supporting analytics for market range, trend context, and locality scoring.
 
-- **Caption:** Service-Oriented Architecture: Frontend (SPA) ↔ Flask API ↔ ML models & file-based data.
-- **Visual:** Insert the architecture diagram (see DIAGRAM_EXPORT.md for Mermaid code and export instructions).
-- User → Frontend → API → ML Layer + Data Pipeline.
+## Slide 6: System Architecture
 
----
+- Frontend: HTML, CSS, JavaScript, Chart.js, Leaflet.
+- Backend: Flask REST API.
+- ML and analytics layer: Pandas, scikit-learn, Joblib.
+- Persistence: CSV data, model artifacts, SQLite for saved searches and shortlist.
 
-## Slide 5: Tech Stack
+## Slide 7: Main User Flow
 
-**Tech Stack**
+- User enters rental requirements in Rent Analytics.
+- System predicts rent and confidence range.
+- Budget and market context are shown.
+- Recommended localities and next actions are generated.
 
-- **Frontend:** HTML5, CSS3 (Glassmorphism), Vanilla JS, Chart.js, Leaflet.js
-- **Backend:** Python, Flask, Flask-CORS
-- **ML:** Scikit-Learn (Random Forest, K-Means), Joblib, Pandas, NumPy
-- **Data:** File-based (CSV, JSON, PKL); OpenStreetMap tiles for map
+## Slide 8: Key Features Implemented
 
----
+- Dashboard and map exploration.
+- Rent Analytics with prediction and recommendations.
+- Trends and forecast.
+- Compare Listings.
+- Locality Scorecard.
+- Saved searches, shortlist, and prediction feedback.
 
-## Slide 6: Data Pipeline (ETL)
+## Slide 9: UI and UX Improvements
 
-**Data Pipeline (ETL)**
+- Simplified analytics form for non-technical users.
+- Theme toggle for light and dark mode.
+- Compact card-based layouts for lower sections.
+- Workplace map URL support instead of manual latitude and longitude entry.
 
-- **Flow:** Raw CSV → Clean (missing values, date normalization) → Augment (synthetic Lat/Lon, Livability_Score) → Export Cleaned CSV + eda_stats.json
-- **Script:** preprocess_data.py
-- Ingest → Clean → Augment → Export
+## Slide 10: Testing and Validation
 
----
+- Python syntax validation for backend.
+- JavaScript syntax validation for frontend logic.
+- Automated unit and smoke tests for main APIs.
+- Local retraining completed to align model artifacts with the current environment.
 
-## Slide 7: Machine Learning Module
+## Slide 11: Results and Practical Value
 
-**Machine Learning Module**
+- Users can estimate fair rent quickly.
+- Users can compare multiple listings side by side.
+- Users can evaluate localities using affordability, livability, and commute context.
+- Users can save searches and shortlist options for later review.
 
-- **Price Prediction:** Random Forest Regressor (BHK, Size, Area Type, City, etc.) → rent estimate.
-- **Clustering:** K-Means on neighborhoods → Affordability / Livability zones.
-- **EDA:** Automated stats (e.g., rent distribution by city) in eda_stats.json.
-- **Artifacts:** price_prediction_model.pkl, kmeans_model.pkl, clustering_scaler.pkl, eda_stats.json, clustered_data.csv.
+## Slide 12: Future Scope
 
----
+- Live listing refresh from external sources.
+- Real travel time instead of approximate distance only.
+- Visit scheduling and negotiation workflow.
+- User login and cloud sync.
 
-## Slide 8: Backend API (Flask)
+## Slide 13: Demo Screens
 
-**Backend API (Flask)**
+- Dashboard
+- Rent Analytics prediction screen
+- Compare Listings
+- Locality Scorecard
 
-- GET / — Serve SPA
-- GET /api/stats — EDA statistics (for charts)
-- GET /api/properties — Filtered property list (city, rent, BHK)
-- GET /api/map_data — Clustered points for Leaflet map
-- POST /api/predict — Rent prediction from form inputs
+## Slide 14: Conclusion
 
----
+- UrbanMove combines data science and web development to support real rental decisions.
+- The project delivers prediction, comparison, recommendation, and persistence in one workflow.
+- The platform can be extended into a production-grade rental intelligence system.
 
-## Slide 9: Frontend — Dashboard
+## Slide 15: Questions
 
-**Frontend: Dashboard**
-
-- Premium/Dark theme with glassmorphism cards
-- Chart.js: Rent Distribution by City
-- Stat cards: Avg Rent, Total Listings, Cities, Median Rent
-- Data-driven insights for urban rentals
-
----
-
-## Slide 10: Frontend — Map & Predictor
-
-**Frontend: Map & Predictor**
-
-- **Map:** Leaflet.js with cluster/heatmap; markers open in Google Maps.
-- **Rent Predictor:** Form (BHK, Size, City, Area Type, etc.) → real-time estimate via /api/predict.
-
----
-
-## Slide 11: User Personas & Use Cases
-
-**User Personas & Use Cases**
-
-- **Urban Migrants** — Rent estimate, affordability zones, livability assessment, budget planning.
-- **Real Estate Analysts** — Market trends, clustering analysis, model performance, feature impact.
-- **System Admins** — Run preprocess_data.py, train_models.py, verify API endpoints, manage artifacts.
-
----
-
-## Slide 12: In-Scope vs Out-of-Scope
-
-**In-Scope vs Out-of-Scope**
-
-- **In-Scope:** Data pipeline, Random Forest + K-Means, Flask API, responsive UI, map, prediction form.
-- **Out-of-Scope:** Live scraping, user auth/profiles, payments/landlord contact, native mobile app, NLP on descriptions.
-
----
-
-## Slide 13: Future Scalability
-
-**Future Scalability**
-
-- Migrate to PostgreSQL + PostGIS for spatial queries
-- Implement full schema: users, saved_searches, neighborhoods, properties, rental_listings, ml_predictions
-- Model versioning and prediction logging
-
----
-
-## Slide 14: Demo / Screenshots
-
-**Demo / Screenshots**
-
-- Screenshot 1: Dashboard (City Overview, charts, stat cards)
-- Screenshot 2: Map Explore (clustering, heatmap)
-- Screenshot 3: Rent Predictor (form + result)
-
----
-
-## Slide 15: Conclusion & Q&A
-
-**Conclusion & Q&A**
-
-- Data-driven DSS for rental decisions: ETL → ML (RF + K-Means) → Flask API → interactive dashboard and map.
-- Thank you — Questions?
+- Thank you
+- Questions and feedback

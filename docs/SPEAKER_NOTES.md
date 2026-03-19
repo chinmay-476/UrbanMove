@@ -1,95 +1,71 @@
-# Urban Rental Decision Support System — Speaker Notes
+# UrbanMove: Rental Analytics and Decision Support System - Speaker Notes
 
-Short notes for what to say on each slide. Adjust timing to your audience (e.g., 1–2 minutes per slide).
-
----
+Use these as short presentation notes. Keep each slide explanation to 30-60 seconds unless the panel asks for detail.
 
 ## Slide 1: Title
 
-- Introduce the project name and subtitle.
-- Optionally: "This is my 6th semester project on a data-driven system to help people make better rental decisions in cities."
-
----
+- Introduce the project name, team, guide, and the fact that this is a rental decision support web application.
 
 ## Slide 2: Problem Statement
 
-- "In big cities, finding the right rental is hard: prices change, areas differ in livability, and people don't have one place to compare and get fair rent estimates."
-- "We're solving information asymmetry—tenants often don't know if a rent is fair or which areas fit their budget."
-
----
+- Explain that renters usually compare budget, locality, and property quality manually.
+- Point out that there is no single simple tool for fair rent estimation plus decision support.
 
 ## Slide 3: Project Objectives
 
-- "We have four main goals: first, integrate and clean rental data; second, build models to predict fair rent; third, analyze neighborhoods with clustering; fourth, give users a web dashboard to explore and get estimates."
+- Mention the four goals: clean data, predict rent, analyze localities, and build a usable interface.
 
----
+## Slide 4: Dataset and Preprocessing
 
-## Slide 4: High-Level Architecture
+- Explain that the raw rental data was cleaned, normalized, and enriched.
+- Mention refreshed listing dates and locality profile support.
 
-- "The system uses a service-oriented design: the user interacts with a frontend SPA, which talks to a Flask API. The API uses ML models and reads from cleaned data. Separately, an ETL pipeline and training scripts produce that data and the model files."
+## Slide 5: Machine Learning Approach
 
----
+- State that Random Forest is used for rent prediction.
+- State that K-Means is used for locality clustering and map grouping.
+- Mention that the system also produces supporting analytics beyond the prediction itself.
 
-## Slide 5: Tech Stack
+## Slide 6: System Architecture
 
-- "Frontend is HTML, CSS with a glassmorphism style, and vanilla JavaScript with Chart.js and Leaflet. Backend is Flask. ML is Scikit-Learn—Random Forest and K-Means—with Joblib for saving models. Data is file-based for now: CSV, JSON, and PKL."
+- Describe the flow as frontend to Flask API to ML/data layer.
+- Mention SQLite for saved searches, shortlist items, and feedback.
 
----
+## Slide 7: Main User Flow
 
-## Slide 6: Data Pipeline (ETL)
+- Walk through the analytics journey: user enters details, gets rent prediction, sees budget gap, and receives recommendations.
 
-- "We start from raw house rent CSV. We clean missing values and dates, then add synthetic latitude/longitude and livability scores. The output is a cleaned CSV and an EDA stats JSON. All of this is done by preprocess_data.py."
+## Slide 8: Key Features Implemented
 
----
+- Highlight Dashboard, Map, Rent Analytics, Trends, Compare Listings, Scorecard, and local persistence features.
 
-## Slide 7: Machine Learning Module
+## Slide 9: UI and UX Improvements
 
-- "We use a Random Forest regressor for rent prediction from BHK, size, city, area type, and similar features. K-Means clusters neighborhoods into affordability and livability zones. EDA stats are precomputed and stored in JSON for the dashboard."
+- Explain that the interface was simplified for non-technical users.
+- Mention card layouts, theme toggle, and map URL input as practical usability improvements.
 
----
+## Slide 10: Testing and Validation
 
-## Slide 8: Backend API (Flask)
+- Say that backend syntax, frontend syntax, and automated API tests were run.
+- Mention that model artifacts were retrained in the current environment for clean verification.
 
-- "The Flask app serves the single-page app and exposes REST endpoints: stats for charts, properties with filters, map_data for the map, and predict for the rent estimator. Models are loaded at startup."
+## Slide 11: Results and Practical Value
 
----
+- Emphasize that the app supports actual rental decision making, not only model prediction.
+- Mention compare, shortlist, scorecard, and saved searches as practical modules.
 
-## Slide 9: Frontend — Dashboard
+## Slide 12: Future Scope
 
-- "The dashboard has a dark, premium look with glass-style cards. It shows key stats—average rent, total listings, cities, median rent—and a Chart.js chart for rent distribution by city."
+- Keep this realistic: live listing freshness, travel-time integration, visit workflow, and cloud accounts.
 
----
+## Slide 13: Demo Screens
 
-## Slide 10: Frontend — Map & Predictor
+- Introduce each screen quickly and connect it to a real user action.
 
-- "The map uses Leaflet with clusters and a heatmap; clicking a marker can open the location in Google Maps. The predictor is a form where you enter BHK, size, city, area type, etc., and get a rent estimate in real time from the API."
+## Slide 14: Conclusion
 
----
+- Summarize that the project combines data engineering, machine learning, and a usable web interface.
 
-## Slide 11: User Personas & Use Cases
+## Slide 15: Questions
 
-- "We target three groups: urban migrants who want estimates and affordability zones; analysts who want market trends and clustering; and admins who run the data and training pipelines and check that APIs work."
-
----
-
-## Slide 12: In-Scope vs Out-of-Scope
-
-- "In scope we have the full pipeline, both ML models, the API, and the UI with map and predictor. Out of scope for this project are live scraping, user accounts, payments, native mobile apps, and NLP on descriptions."
-
----
-
-## Slide 13: Future Scalability
-
-- "For scaling, we could move to PostgreSQL with PostGIS, add the full schema from our design doc—users, saved searches, neighborhoods, properties, listings, and prediction logs—and add model versioning."
-
----
-
-## Slide 14: Demo / Screenshots
-
-- "Here are screenshots of the dashboard, the map with clusters, and the rent predictor. [If doing live demo: I can show a quick demo of the app.]"
-
----
-
-## Slide 15: Conclusion & Q&A
-
-- "To wrap up: we built a data-driven decision support system—ETL, Random Forest and K-Means, Flask API, and an interactive dashboard and map—to help users with rental decisions. Thank you; I'm happy to take questions."
+- Invite questions on dataset, ML approach, API design, or frontend workflow.

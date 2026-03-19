@@ -6,7 +6,8 @@ import os
 import json
 import numpy as np
 import random
-from datetime import datetime
+import sqlite3
+from datetime import datetime, timezone
 import subprocess
 import shutil
 import sys
@@ -24,11 +25,52 @@ DATASET_PATH = os.path.join(BASE_DIR, 'Cleaned_House_Rent_Dataset.csv')
 ALERTS_PATH = os.path.join(ARTIFACTS_DIR, 'alerts.json')
 MODEL_METRICS_HISTORY_PATH = os.path.join(ARTIFACTS_DIR, 'model_metrics_history.json')
 MODEL_PATH = os.path.join(ARTIFACTS_DIR, 'price_prediction_model.pkl')
+INSTANCE_DIR = os.path.join(BASE_DIR, 'instance')
+DB_PATH = os.path.join(INSTANCE_DIR, 'urbanmove.sqlite3')
+LOCALITY_PROFILES_PATH = os.path.join(BASE_DIR, 'data', 'locality_profiles.csv')
 
 # In-memory cache to avoid reading CSV from disk on every request.
 _DATASET_CACHE = {
     'mtime': None,
+    'df': None,
+    'last_updated_max': None
+}
+_LOCALITY_PROFILE_CACHE = {
+    'mtime': None,
     'df': None
+}
+_TRUST_CACHE = {
+    'mtime': None,
+    'map': None
+}
+
+LOCALITY_PROFILE_COLUMNS = [
+    'city', 'locality', 'transit_score', 'safety_score', 'school_score',
+    'hospital_score', 'grocery_score', 'parking_score', 'flood_risk_score',
+    'noise_score', 'family_score', 'bachelor_score', 'pet_score', 'notes'
+]
+CORE_LISTING_FIELDS = {
+    'City': 'city',
+    'Area Locality': 'locality',
+    'Rent': 'rent',
+    'BHK': 'bhk',
+    'Size': 'size',
+    'Bathroom': 'bathroom'
+}
+DEFAULT_COST_ASSUMPTIONS = {
+    'deposit_months': 2.0,
+    'brokerage_months': 1.0,
+    'maintenance': 2500.0,
+    'utilities': 3000.0,
+    'parking': 1500.0,
+    'moving_cost': 8000.0
+}
+DEFAULT_LOCALITY_WEIGHTS = {
+    'cost_weight': 35.0,
+    'commute_weight': 15.0,
+    'safety_weight': 20.0,
+    'transit_weight': 15.0,
+    'amenity_weight': 15.0
 }
 
 CITY_COORDS = {
@@ -72,10 +114,101 @@ def load_dataset():
 
     mtime = os.path.getmtime(DATASET_PATH)
     if _DATASET_CACHE['df'] is None or _DATASET_CACHE['mtime'] != mtime:
-        _DATASET_CACHE['df'] = pd.read_csv(DATASET_PATH)
+        dataset_df = pd.read_csv(DATASET_PATH)
+        _DATASET_CACHE['df'] = dataset_df
         _DATASET_CACHE['mtime'] = mtime
+        parsed_updates = pd.to_datetime(dataset_df.get('Listing_Last_Updated'), errors='coerce')
+        valid_updates = parsed_updates.dropna()
+        _DATASET_CACHE['last_updated_max'] = valid_updates.max().normalize() if not valid_updates.empty else None
 
     return _DATASET_CACHE['df'].copy()
+
+def get_db_connection():
+    os.makedirs(INSTANCE_DIR, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_local_db():
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shortlist_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                listing_id INTEGER,
+                city TEXT,
+                locality TEXT,
+                rent REAL,
+                bhk INTEGER,
+                size REAL,
+                notes TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS saved_searches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                search_params_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS prediction_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                input_json TEXT NOT NULL,
+                predicted_rent REAL NOT NULL,
+                actual_rent REAL NOT NULL,
+                feedback_text TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def _normalize_text(value):
+    if value is None:
+        return ''
+    return str(value).strip().lower()
+
+def _clean_optional_text(value):
+    try:
+        if pd.isna(value):
+            return ''
+    except Exception:
+        pass
+
+    text = str(value or '').strip()
+    return '' if text.lower() in ('nan', 'none', 'null', 'undefined') else text
+
+def load_locality_profiles():
+    if not os.path.exists(LOCALITY_PROFILES_PATH):
+        return pd.DataFrame(columns=LOCALITY_PROFILE_COLUMNS)
+
+    mtime = os.path.getmtime(LOCALITY_PROFILES_PATH)
+    if _LOCALITY_PROFILE_CACHE['df'] is None or _LOCALITY_PROFILE_CACHE['mtime'] != mtime:
+        df = pd.read_csv(LOCALITY_PROFILES_PATH)
+        for col in LOCALITY_PROFILE_COLUMNS:
+            if col not in df.columns:
+                df[col] = ''
+
+        numeric_cols = [col for col in LOCALITY_PROFILE_COLUMNS if col.endswith('_score')]
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').clip(0, 10)
+
+        df['city_key'] = df['city'].apply(_normalize_text)
+        df['locality_key'] = df['locality'].apply(_normalize_text)
+        _LOCALITY_PROFILE_CACHE['df'] = df
+        _LOCALITY_PROFILE_CACHE['mtime'] = mtime
+
+    return _LOCALITY_PROFILE_CACHE['df'].copy()
 
 def _safe_json_read(path, default):
     try:
@@ -90,6 +223,15 @@ def _safe_json_write(path, payload):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(payload, f, indent=2)
+
+def _safe_json_read_from_text(text):
+    try:
+        return json.loads(text or '{}')
+    except Exception:
+        return {}
+
+def _utc_timestamp():
+    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 def _json_safe(value):
     """Convert NaN/Inf and non-JSON-native scalars into JSON-safe values."""
@@ -124,6 +266,249 @@ def _json_safe(value):
 
 def _get_city_coords(city):
     return CITY_COORDS.get(city, (20.5937, 78.9629))
+
+def _is_missing_text(series):
+    return series.fillna('').astype(str).str.strip().eq('')
+
+def _is_missing_numeric(series):
+    return pd.to_numeric(series, errors='coerce').isna()
+
+def _is_synthetic_locality(value):
+    locality = _normalize_text(value)
+    return locality in ('', 'unknown locality') or locality.startswith('locality in ')
+
+def _get_listing_reference_date():
+    if _DATASET_CACHE.get('df') is None:
+        try:
+            load_dataset()
+        except Exception:
+            return pd.Timestamp(datetime.now(timezone.utc).date())
+
+    cached_value = _DATASET_CACHE.get('last_updated_max')
+    if cached_value is not None and not pd.isna(cached_value):
+        return pd.Timestamp(cached_value).normalize()
+    return pd.Timestamp(datetime.now(timezone.utc).date())
+
+def _build_listing_operational_metadata(source):
+    record = source if isinstance(source, dict) else {}
+    result = {
+        'listing_last_updated': '',
+        'days_since_update': None,
+        'freshness_label': 'Update date unavailable',
+        'freshness_class': 'freshness-unknown',
+        'contact_type_label': 'Contact type unavailable',
+        'contact_type_class': 'contact-unknown'
+    }
+
+    parsed_date = pd.to_datetime(record.get('Listing_Last_Updated'), errors='coerce')
+    if not pd.isna(parsed_date):
+        parsed_date = parsed_date.normalize()
+        reference_date = _get_listing_reference_date()
+        days_since = max(0, int((reference_date - parsed_date).days))
+        if days_since <= 7:
+            freshness_class = 'freshness-fresh'
+            freshness_label = 'Fresh today' if days_since == 0 else f'Fresh {days_since}d ago'
+        elif days_since <= 30:
+            freshness_class = 'freshness-recent'
+            freshness_label = f'Recent {days_since}d ago'
+        elif days_since <= 60:
+            freshness_class = 'freshness-aging'
+            freshness_label = f'Aging {days_since}d ago'
+        else:
+            freshness_class = 'freshness-stale'
+            freshness_label = f'Older {days_since}d ago'
+
+        result.update({
+            'listing_last_updated': parsed_date.date().isoformat(),
+            'days_since_update': days_since,
+            'freshness_label': freshness_label,
+            'freshness_class': freshness_class
+        })
+
+    contact_value = _normalize_text(record.get('Point of Contact'))
+    if 'owner' in contact_value:
+        result['contact_type_label'] = 'Owner listed'
+        result['contact_type_class'] = 'contact-owner'
+    elif 'agent' in contact_value or 'broker' in contact_value:
+        result['contact_type_label'] = 'Agent listed'
+        result['contact_type_class'] = 'contact-agent'
+    elif 'builder' in contact_value:
+        result['contact_type_label'] = 'Builder listed'
+        result['contact_type_class'] = 'contact-builder'
+
+    return result
+
+def _build_listing_trust_map(df):
+    if df.empty:
+        return {}
+
+    work = df.copy()
+    work['_row_id'] = work.index.astype(int)
+    work['_city_key'] = work.get('City', pd.Series(index=work.index, dtype='object')).fillna('').astype(str).str.strip().str.lower()
+    work['_locality_key'] = work.get('Area Locality', pd.Series(index=work.index, dtype='object')).fillna('').astype(str).str.strip().str.lower()
+    work['_synthetic_locality'] = work.get('Area Locality', pd.Series(index=work.index, dtype='object')).apply(_is_synthetic_locality)
+    work['_bhk_num'] = pd.to_numeric(work.get('BHK'), errors='coerce')
+    work['_size_num'] = pd.to_numeric(work.get('Size'), errors='coerce')
+    work['_rent_num'] = pd.to_numeric(work.get('Rent'), errors='coerce')
+    work['_bath_num'] = pd.to_numeric(work.get('Bathroom'), errors='coerce')
+    work['_size_bucket'] = np.where(work['_size_num'].notna(), (work['_size_num'] / 100.0).round(), -1)
+    work['_rent_bucket'] = np.where(work['_rent_num'].notna(), (work['_rent_num'] / 1000.0).round(), -1)
+    work['_bhk_bucket'] = work['_bhk_num'].fillna(-1)
+
+    dup_group = ['_city_key', '_locality_key', '_bhk_bucket', '_size_bucket', '_rent_bucket']
+    work['_duplicate_like_count'] = work.groupby(dup_group, dropna=False)['_row_id'].transform('count')
+
+    group_cols = ['_city_key', '_bhk_bucket']
+    q1 = work.groupby(group_cols, dropna=False)['_rent_num'].transform(lambda s: s.quantile(0.25) if s.notna().sum() >= 8 else np.nan)
+    q3 = work.groupby(group_cols, dropna=False)['_rent_num'].transform(lambda s: s.quantile(0.75) if s.notna().sum() >= 8 else np.nan)
+    counts = work.groupby(group_cols, dropna=False)['_rent_num'].transform(lambda s: s.notna().sum())
+    iqr = q3 - q1
+    lower = q1 - (1.5 * iqr)
+    upper = q3 + (1.5 * iqr)
+    work['_outlier'] = counts.ge(8) & work['_rent_num'].notna() & (
+        (work['_rent_num'] < lower) | (work['_rent_num'] > upper)
+    )
+
+    missing_masks = {}
+    for col, label in CORE_LISTING_FIELDS.items():
+        if col in ('Rent', 'BHK', 'Size', 'Bathroom'):
+            missing_masks[label] = _is_missing_numeric(work.get(col, pd.Series(index=work.index, dtype='object')))
+        else:
+            missing_masks[label] = _is_missing_text(work.get(col, pd.Series(index=work.index, dtype='object')))
+
+    trust_map = {}
+    for _, row in work.iterrows():
+        data_quality_flags = []
+        trust_flags = []
+        penalty = 0.0
+
+        for label, mask in missing_masks.items():
+            if bool(mask.loc[row.name]):
+                data_quality_flags.append(f'missing_{label}')
+                penalty += 7.5
+
+        duplicate_count = int(row['_duplicate_like_count']) if pd.notna(row['_duplicate_like_count']) else 0
+        if duplicate_count > 1:
+            trust_flags.append('duplicate_like_listing')
+            penalty += min(22.0, float((duplicate_count - 1) * 8.0))
+
+        if bool(row['_outlier']):
+            trust_flags.append('rent_outlier_for_city_bhk')
+            penalty += 14.0
+
+        if bool(row['_synthetic_locality']):
+            trust_flags.append('synthetic_locality_signal')
+            penalty += 10.0
+
+        trust_score = max(0.0, min(100.0, 100.0 - penalty))
+        trust_map[int(row['_row_id'])] = {
+            'trust_score': round(float(trust_score), 1),
+            'trust_flags': trust_flags,
+            'data_quality_flags': data_quality_flags
+        }
+
+    return trust_map
+
+def get_listing_trust_map():
+    if not os.path.exists(DATASET_PATH):
+        return {}
+
+    mtime = os.path.getmtime(DATASET_PATH)
+    if _TRUST_CACHE['map'] is None or _TRUST_CACHE['mtime'] != mtime:
+        _TRUST_CACHE['map'] = _build_listing_trust_map(load_dataset())
+        _TRUST_CACHE['mtime'] = mtime
+    return _TRUST_CACHE['map']
+
+def _attach_trust_metadata(record, listing_id=None):
+    if listing_id is None:
+        try:
+            listing_id = int(record.get('id'))
+        except Exception:
+            listing_id = None
+
+    trust_map = get_listing_trust_map()
+    meta = trust_map.get(int(listing_id)) if listing_id is not None else None
+    if meta:
+        record['trust_score'] = meta['trust_score']
+        record['trust_flags'] = meta['trust_flags']
+        record['data_quality_flags'] = meta['data_quality_flags']
+    else:
+        record.setdefault('trust_score', None)
+        record.setdefault('trust_flags', [])
+        record.setdefault('data_quality_flags', [])
+
+    record.update(_build_listing_operational_metadata(record))
+    return record
+
+def _safe_float(payload, key, default):
+    value = payload.get(key, default)
+    if value in (None, ''):
+        return float(default)
+    return float(value)
+
+def _build_cost_breakdown(payload):
+    rent = _safe_float(payload, 'rent', 0.0)
+    if rent <= 0:
+        raise ValueError("A positive 'rent' value is required.")
+
+    deposit_months = _safe_float(payload, 'deposit_months', DEFAULT_COST_ASSUMPTIONS['deposit_months'])
+    brokerage_months = _safe_float(payload, 'brokerage_months', DEFAULT_COST_ASSUMPTIONS['brokerage_months'])
+    maintenance = _safe_float(payload, 'maintenance', DEFAULT_COST_ASSUMPTIONS['maintenance'])
+    utilities = _safe_float(payload, 'utilities', DEFAULT_COST_ASSUMPTIONS['utilities'])
+    parking = _safe_float(payload, 'parking', DEFAULT_COST_ASSUMPTIONS['parking'])
+    moving_cost = _safe_float(payload, 'moving_cost', DEFAULT_COST_ASSUMPTIONS['moving_cost'])
+
+    if min(deposit_months, brokerage_months, maintenance, utilities, parking, moving_cost) < 0:
+        raise ValueError('Cost inputs cannot be negative.')
+
+    monthly_total = rent + maintenance + utilities + parking
+    move_in_cash = (
+        rent +
+        (rent * deposit_months) +
+        (rent * brokerage_months) +
+        maintenance +
+        utilities +
+        parking +
+        moving_cost
+    )
+
+    return {
+        'rent': round(rent, 2),
+        'assumptions': {
+            'deposit_months': round(deposit_months, 2),
+            'brokerage_months': round(brokerage_months, 2),
+            'maintenance': round(maintenance, 2),
+            'utilities': round(utilities, 2),
+            'parking': round(parking, 2),
+            'moving_cost': round(moving_cost, 2)
+        },
+        'line_items': {
+            'monthly_rent': round(rent, 2),
+            'monthly_maintenance': round(maintenance, 2),
+            'monthly_utilities': round(utilities, 2),
+            'monthly_parking': round(parking, 2),
+            'security_deposit': round(rent * deposit_months, 2),
+            'brokerage_fee': round(rent * brokerage_months, 2),
+            'moving_cost': round(moving_cost, 2)
+        },
+        'monthly_total': round(monthly_total, 2),
+        'move_in_cash': round(move_in_cash, 2),
+        'six_month_total': round(move_in_cash + (monthly_total * 5), 2),
+        'twelve_month_total': round(move_in_cash + (monthly_total * 11), 2)
+    }
+
+def _get_locality_profile_frame(city=None):
+    profiles = load_locality_profiles()
+    if profiles.empty:
+        return profiles
+    if city:
+        city_key = _normalize_text(city)
+        city_profiles = profiles[profiles['city_key'] == city_key]
+        if not city_profiles.empty:
+            return city_profiles.copy()
+    return profiles.copy()
+
+init_local_db()
 
 def _haversine_km(lat1, lon1, lat2, lon2):
     r = 6371.0
@@ -215,7 +600,6 @@ def get_stats():
 @app.route('/api/properties', methods=['GET'])
 def get_properties():
     try:
-        # Load dataset
         df = load_dataset()
         
         # Get query parameters for filtering
@@ -246,7 +630,8 @@ def get_properties():
         for idx, prop in zip(properties_df.index.tolist(), properties):
             if 'id' not in prop:
                 prop['id'] = int(idx)
-                
+            _attach_trust_metadata(prop, idx)
+                 
         return jsonify({
             'properties': properties,
             'total': len(df),
@@ -303,13 +688,24 @@ def get_map_data():
 def get_property(prop_id):
     try:
         df = load_dataset()
-        # Assuming ID is index if not explicit
-        if 0 <= prop_id < len(df):
+        prop = None
+        record_id = None
+        if prop_id in df.index:
+            selected = df.loc[prop_id]
+            if isinstance(selected, pd.DataFrame):
+                selected = selected.iloc[0]
+            prop = selected.fillna('').to_dict()
+            record_id = int(prop_id)
+        elif 0 <= prop_id < len(df):
             prop = df.iloc[prop_id].fillna('').to_dict()
-            prop['id'] = prop_id
-            return jsonify(prop)
-        else:
+            record_id = int(prop_id)
+
+        if prop is None:
             return jsonify({'error': 'Property not found'}), 404
+
+        prop['id'] = record_id
+        _attach_trust_metadata(prop, record_id)
+        return jsonify(_json_safe(prop))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -333,6 +729,257 @@ def get_cities():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cost_breakdown', methods=['POST'])
+def cost_breakdown():
+    try:
+        payload = request.json or {}
+        return jsonify(_build_cost_breakdown(payload))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/personalized_localities', methods=['GET'])
+def get_personalized_localities():
+    try:
+        city = request.args.get('city')
+        bhk = request.args.get('bhk', type=int)
+        budget = request.args.get('budget', type=float)
+        tenant = request.args.get('tenant', default='Bachelors/Family')
+        has_pet = _normalize_text(request.args.get('has_pet', 'false')) in ('1', 'true', 'yes', 'y', 'on')
+        work_city = request.args.get('work_city') or city or 'Mumbai'
+        work_lat = request.args.get('work_lat', type=float)
+        work_lon = request.args.get('work_lon', type=float)
+        limit = request.args.get('limit', default=6, type=int)
+        limit = max(3, min(limit if limit is not None else 6, 15))
+
+        if work_lat is None or work_lon is None:
+            work_lat, work_lon = _get_city_coords(work_city)
+
+        weights = {}
+        for key, default_value in DEFAULT_LOCALITY_WEIGHTS.items():
+            incoming = request.args.get(key, type=float)
+            weights[key] = float(incoming) if incoming is not None else float(default_value)
+
+        weight_total = sum(max(0.0, value) for value in weights.values())
+        if weight_total <= 0:
+            weights = DEFAULT_LOCALITY_WEIGHTS.copy()
+            weight_total = float(sum(weights.values()))
+        normalized_weights = {key: max(0.0, value) / weight_total for key, value in weights.items()}
+
+        df = load_dataset()
+        if city:
+            df = df[df['City'].fillna('').str.lower() == city.lower()]
+        if bhk:
+            df = df[df['BHK'] == bhk]
+
+        required = ['Rent', 'Area Locality', 'City']
+        if any(col not in df.columns for col in required):
+            return jsonify({'error': 'Required columns missing for personalized locality ranking.'}), 500
+
+        work = df.copy()
+        work['Rent'] = pd.to_numeric(work.get('Rent'), errors='coerce')
+        work['Latitude'] = pd.to_numeric(work.get('Latitude'), errors='coerce')
+        work['Longitude'] = pd.to_numeric(work.get('Longitude'), errors='coerce')
+        work['Area Locality'] = work['Area Locality'].fillna('').replace('', 'Unknown locality')
+        if 'Neighborhood_Livability_Score' not in work.columns:
+            work['Neighborhood_Livability_Score'] = 5.0
+        work['Neighborhood_Livability_Score'] = pd.to_numeric(
+            work['Neighborhood_Livability_Score'], errors='coerce'
+        ).fillna(5.0)
+        work = work.dropna(subset=['Rent'])
+        if work.empty:
+            return jsonify({'recommendations': [], 'total_candidates': 0})
+
+        grouped = (
+            work.groupby('Area Locality', as_index=False)
+                .agg(
+                    city=('City', lambda s: s.mode().iloc[0] if not s.mode().empty else (s.iloc[0] if len(s) else 'N/A')),
+                    avg_rent=('Rent', 'mean'),
+                    median_rent=('Rent', 'median'),
+                    livability=('Neighborhood_Livability_Score', 'mean'),
+                    listings=('Rent', 'count'),
+                    lat=('Latitude', 'mean'),
+                    lon=('Longitude', 'mean')
+                )
+        )
+        if grouped.empty:
+            return jsonify({'recommendations': [], 'total_candidates': 0})
+
+        grouped['city_key'] = grouped['city'].apply(_normalize_text)
+        grouped['locality_key'] = grouped['Area Locality'].apply(_normalize_text)
+
+        profiles = _get_locality_profile_frame(city)
+        score_cols = [col for col in LOCALITY_PROFILE_COLUMNS if col.endswith('_score')]
+        if not profiles.empty:
+            dedup_profiles = profiles.drop_duplicates(subset=['city_key', 'locality_key'], keep='first')
+            grouped = grouped.merge(
+                dedup_profiles[['city_key', 'locality_key'] + score_cols + ['notes']],
+                on=['city_key', 'locality_key'],
+                how='left'
+            )
+        else:
+            for col in score_cols:
+                grouped[col] = np.nan
+            grouped['notes'] = ''
+
+        city_profile_defaults = {}
+        if not profiles.empty:
+            city_profiles = profiles[profiles['city_key'] == _normalize_text(city)] if city else profiles
+            if not city_profiles.empty:
+                city_profile_defaults = city_profiles[score_cols].mean(numeric_only=True).to_dict()
+
+        for col in score_cols:
+            grouped[col] = pd.to_numeric(grouped.get(col), errors='coerce')
+            grouped[col] = grouped[col].fillna(city_profile_defaults.get(col, 5.0)).clip(0, 10)
+
+        grouped['notes'] = grouped.get('notes', pd.Series('', index=grouped.index)).apply(_clean_optional_text)
+        grouped['profile_found'] = grouped['notes'].ne('')
+        grouped['amenity_score_raw'] = grouped[
+            ['school_score', 'hospital_score', 'grocery_score', 'parking_score']
+        ].mean(axis=1)
+        grouped['safety_component'] = (
+            grouped['safety_score'] +
+            (10.0 - grouped['flood_risk_score']) +
+            (10.0 - grouped['noise_score'])
+        ) / 30.0
+        grouped['transit_component'] = grouped['transit_score'] / 10.0
+        grouped['amenity_component'] = grouped['amenity_score_raw'] / 10.0
+
+        if budget is not None and budget > 0:
+            grouped['cost_component'] = (1 - (grouped['avg_rent'] - budget).abs() / max(budget, 1.0)).clip(0, 1)
+        else:
+            rent_span = max(float(grouped['avg_rent'].max() - grouped['avg_rent'].min()), 1.0)
+            grouped['cost_component'] = 1 - ((grouped['avg_rent'] - grouped['avg_rent'].min()) / rent_span)
+
+        grouped['lat'] = pd.to_numeric(grouped['lat'], errors='coerce')
+        grouped['lon'] = pd.to_numeric(grouped['lon'], errors='coerce')
+        missing_coords = grouped[['lat', 'lon']].isna().any(axis=1)
+        if bool(missing_coords.any()):
+            grouped.loc[missing_coords, 'lat'] = grouped.loc[missing_coords, 'city'].apply(lambda value: _get_city_coords(value)[0])
+            grouped.loc[missing_coords, 'lon'] = grouped.loc[missing_coords, 'city'].apply(lambda value: _get_city_coords(value)[1])
+        grouped['commute_km'] = grouped.apply(
+            lambda row: _haversine_km(float(row['lat']), float(row['lon']), float(work_lat), float(work_lon)),
+            axis=1
+        )
+        grouped['commute_component'] = np.exp(-grouped['commute_km'] / 18.0).clip(0, 1)
+
+        tenant_key = _normalize_text(tenant)
+        if 'family' in tenant_key and 'bachelor' not in tenant_key:
+            grouped['tenant_fit'] = grouped['family_score'] / 10.0
+        elif 'bachelor' in tenant_key and 'family' not in tenant_key:
+            grouped['tenant_fit'] = grouped['bachelor_score'] / 10.0
+        else:
+            grouped['tenant_fit'] = (grouped['family_score'] + grouped['bachelor_score']) / 20.0
+        grouped['pet_fit'] = grouped['pet_score'] / 10.0 if has_pet else 0.5
+
+        grouped['match_score_raw'] = (
+            normalized_weights['cost_weight'] * grouped['cost_component'] +
+            normalized_weights['commute_weight'] * grouped['commute_component'] +
+            normalized_weights['safety_weight'] * grouped['safety_component'] +
+            normalized_weights['transit_weight'] * grouped['transit_component'] +
+            normalized_weights['amenity_weight'] * grouped['amenity_component'] +
+            0.08 * grouped['tenant_fit'] +
+            0.04 * grouped['pet_fit']
+        )
+        grouped['match_score'] = (grouped['match_score_raw'] * 100.0).clip(0, 100)
+
+        recommendations = []
+        for _, row in grouped.sort_values(by=['match_score', 'listings'], ascending=[False, False]).head(limit).iterrows():
+            explanation_chips = []
+            if budget is not None and row['avg_rent'] <= budget:
+                explanation_chips.append('Under budget target')
+            if row['commute_km'] <= 10:
+                explanation_chips.append('Short commute')
+            if row['safety_component'] >= 0.75:
+                explanation_chips.append('Strong safety profile')
+            if row['transit_component'] >= 0.7:
+                explanation_chips.append('Good transit access')
+            if row['amenity_component'] >= 0.7:
+                explanation_chips.append('Strong daily amenities')
+            if row['tenant_fit'] >= 0.7:
+                explanation_chips.append('Matches tenant type')
+            if has_pet and row['pet_fit'] >= 0.7:
+                explanation_chips.append('Pet friendly profile')
+
+            sample_listing_id = None
+            sample_trust_score = None
+            sample_trust_flags = []
+            sample_quality_flags = []
+            sample_operational_meta = _build_listing_operational_metadata({})
+            locality_rows = work[work['Area Locality'] == row['Area Locality']].copy()
+            if not locality_rows.empty:
+                locality_rows['rent_gap'] = (locality_rows['Rent'] - float(row['avg_rent'])).abs()
+                sample_row = locality_rows.sort_values(by=['rent_gap']).iloc[0]
+                sample_listing_id = int(sample_row.name)
+                sample_meta = get_listing_trust_map().get(sample_listing_id, {})
+                sample_trust_score = sample_meta.get('trust_score')
+                sample_trust_flags = sample_meta.get('trust_flags', [])
+                sample_quality_flags = sample_meta.get('data_quality_flags', [])
+                sample_operational_meta = _build_listing_operational_metadata(sample_row.to_dict())
+
+            recommendations.append({
+                'locality': row['Area Locality'],
+                'city': row['city'],
+                'avg_rent': round(float(row['avg_rent']), 2),
+                'median_rent': round(float(row['median_rent']), 2),
+                'livability': round(float(row['livability']), 2),
+                'match_score': round(float(row['match_score']), 1),
+                'commute_km': round(float(row['commute_km']), 2),
+                'profile_source': 'curated' if bool(row['profile_found']) else 'fallback',
+                'profile_notes': _clean_optional_text(row.get('notes', '')),
+                'scores': {
+                    'cost': round(float(row['cost_component']) * 100.0, 1),
+                    'commute': round(float(row['commute_component']) * 100.0, 1),
+                    'safety': round(float(row['safety_component']) * 100.0, 1),
+                    'transit': round(float(row['transit_component']) * 100.0, 1),
+                    'amenity': round(float(row['amenity_component']) * 100.0, 1),
+                    'tenant_fit': round(float(row['tenant_fit']) * 100.0, 1),
+                    'pet_fit': round(float(row['pet_fit']) * 100.0, 1)
+                },
+                'profile': {
+                    'transit_score': round(float(row['transit_score']), 1),
+                    'safety_score': round(float(row['safety_score']), 1),
+                    'school_score': round(float(row['school_score']), 1),
+                    'hospital_score': round(float(row['hospital_score']), 1),
+                    'grocery_score': round(float(row['grocery_score']), 1),
+                    'parking_score': round(float(row['parking_score']), 1),
+                    'flood_risk_score': round(float(row['flood_risk_score']), 1),
+                    'noise_score': round(float(row['noise_score']), 1),
+                    'family_score': round(float(row['family_score']), 1),
+                    'bachelor_score': round(float(row['bachelor_score']), 1),
+                    'pet_score': round(float(row['pet_score']), 1)
+                },
+                'listing_count': int(row['listings']),
+                'coordinates': {
+                    'lat': round(float(row['lat']), 5),
+                    'lon': round(float(row['lon']), 5)
+                },
+                'explanation_chips': explanation_chips[:4],
+                'sample_listing_id': sample_listing_id,
+                'sample_trust_score': sample_trust_score,
+                'sample_trust_flags': sample_trust_flags,
+                'sample_data_quality_flags': sample_quality_flags,
+                'sample_last_updated': sample_operational_meta.get('listing_last_updated'),
+                'sample_days_since_update': sample_operational_meta.get('days_since_update'),
+                'sample_freshness_label': sample_operational_meta.get('freshness_label'),
+                'sample_freshness_class': sample_operational_meta.get('freshness_class'),
+                'sample_contact_type_label': sample_operational_meta.get('contact_type_label'),
+                'sample_contact_type_class': sample_operational_meta.get('contact_type_class')
+            })
+
+        return jsonify({
+            'city': city,
+            'bhk': bhk,
+            'budget': budget,
+            'tenant': tenant,
+            'has_pet': has_pet,
+            'work_coordinates': {'lat': float(work_lat), 'lon': float(work_lon)},
+            'weights': _json_safe(normalized_weights),
+            'recommendations': recommendations,
+            'total_candidates': int(len(grouped))
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/budget_advisor', methods=['GET'])
 def get_budget_advisor():
@@ -672,7 +1319,7 @@ def get_rent_trends():
             'city': city,
             'bhk': bhk,
             'locality': locality,
-            'generated_at': datetime.utcnow().isoformat() + 'Z',
+            'generated_at': _utc_timestamp(),
             'timeline_source': date_source,
             'market_size': int(len(trend_df)),
             'months_history': months_history,
@@ -838,7 +1485,7 @@ def get_similar_listings():
         top = []
         for rank, (idx, score) in enumerate(score_rows[:limit], start=1):
             row = df.loc[idx]
-            top.append({
+            record = {
                 'rank': rank,
                 'id': int(idx),
                 'match_score': round(float(score), 1),
@@ -850,7 +1497,9 @@ def get_similar_listings():
                 'bathroom': int(row.get('Bathroom', 0)),
                 'furnishing': row.get('Furnishing Status', ''),
                 'area_type': row.get('Area Type', '')
-            })
+            }
+            _attach_trust_metadata(record, idx)
+            top.append(record)
 
         return jsonify({
             'total_candidates': int(len(df)),
@@ -1201,7 +1850,10 @@ def model_monitoring():
             rent_drift_pct = round(((current_avg - baseline_avg) / baseline_avg) * 100.0, 2)
 
         model_file = MODEL_PATH
-        model_mtime = datetime.utcfromtimestamp(os.path.getmtime(model_file)).isoformat() + 'Z' if os.path.exists(model_file) else None
+        model_mtime = (
+            datetime.fromtimestamp(os.path.getmtime(model_file), timezone.utc).isoformat().replace('+00:00', 'Z')
+            if os.path.exists(model_file) else None
+        )
         mae_sample = _evaluate_model_mae(model) if model else None
 
         history = _safe_json_read(MODEL_METRICS_HISTORY_PATH, [])
@@ -1286,7 +1938,7 @@ def retrain_pipeline():
 
         history = _safe_json_read(MODEL_METRICS_HISTORY_PATH, [])
         history.append({
-            'timestamp_utc': datetime.utcnow().isoformat() + 'Z',
+            'timestamp_utc': _utc_timestamp(),
             'old_mae': round(float(old_mae), 2) if old_mae is not None else None,
             'new_mae': round(float(new_mae), 2) if new_mae is not None else None,
             'promoted': promoted,
@@ -1328,7 +1980,7 @@ def alerts():
             'bhk': payload.get('bhk'),
             'budget': float(budget),
             'active': bool(payload.get('active', True)),
-            'created_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': _utc_timestamp()
         }
         alerts_list.append(new_alert)
         _safe_json_write(ALERTS_PATH, alerts_list)
@@ -1420,6 +2072,7 @@ def compare_listings():
 
             if row is not None:
                 row['id'] = int(idx)
+                _attach_trust_metadata(row, idx)
                 rows.append(_json_safe(row))
 
         if not rows:
@@ -1447,6 +2100,221 @@ def compare_listings():
         return jsonify(_json_safe({'comparisons': rows, 'summary': summary}))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/shortlist', methods=['GET', 'POST', 'DELETE'])
+def shortlist():
+    try:
+        if request.method == 'GET':
+            conn = get_db_connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, listing_id, city, locality, rent, bhk, size, notes, created_at
+                    FROM shortlist_items
+                    ORDER BY created_at DESC, id DESC
+                    """
+                ).fetchall()
+            finally:
+                conn.close()
+            return jsonify({'items': [_json_safe(dict(row)) for row in rows], 'total': len(rows)})
+
+        if request.method == 'POST':
+            payload = request.get_json(silent=True) or {}
+            city = str(payload.get('city') or '').strip()
+            locality = str(payload.get('locality') or '').strip()
+            listing_id = payload.get('listing_id')
+            rent = payload.get('rent')
+            bhk = payload.get('bhk')
+            size = payload.get('size')
+            notes = str(payload.get('notes') or '').strip()
+            created_at = _utc_timestamp()
+
+            if not city and not locality and listing_id in (None, ''):
+                return jsonify({'error': 'Provide listing_id or city/locality to save shortlist item.'}), 400
+
+            conn = get_db_connection()
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO shortlist_items (listing_id, city, locality, rent, bhk, size, notes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(listing_id) if listing_id not in (None, '') else None,
+                        city or None,
+                        locality or None,
+                        float(rent) if rent not in (None, '') else None,
+                        int(bhk) if bhk not in (None, '') else None,
+                        float(size) if size not in (None, '') else None,
+                        notes or None,
+                        created_at
+                    )
+                )
+                item_id = int(cursor.lastrowid)
+                total = int(conn.execute("SELECT COUNT(*) FROM shortlist_items").fetchone()[0])
+                conn.commit()
+            finally:
+                conn.close()
+
+            return jsonify({
+                'item': {
+                    'id': item_id,
+                    'listing_id': int(listing_id) if listing_id not in (None, '') else None,
+                    'city': city or None,
+                    'locality': locality or None,
+                    'rent': float(rent) if rent not in (None, '') else None,
+                    'bhk': int(bhk) if bhk not in (None, '') else None,
+                    'size': float(size) if size not in (None, '') else None,
+                    'notes': notes or None,
+                    'created_at': created_at
+                },
+                'total': total
+            })
+
+        payload = request.get_json(silent=True) or {}
+        item_id = request.args.get('id', type=int)
+        if item_id is None:
+            raw_id = payload.get('id')
+            item_id = int(raw_id) if raw_id not in (None, '') else None
+        if item_id is None:
+            return jsonify({'error': 'Shortlist item id is required for delete.'}), 400
+
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM shortlist_items WHERE id = ?", (int(item_id),))
+            total = int(conn.execute("SELECT COUNT(*) FROM shortlist_items").fetchone()[0])
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({'deleted_id': int(item_id), 'total': total})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/saved_searches', methods=['GET', 'POST', 'DELETE'])
+def saved_searches():
+    try:
+        if request.method == 'GET':
+            conn = get_db_connection()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, name, search_params_json, created_at
+                    FROM saved_searches
+                    ORDER BY created_at DESC, id DESC
+                    """
+                ).fetchall()
+            finally:
+                conn.close()
+
+            items = []
+            for row in rows:
+                item = dict(row)
+                item['search_params'] = _safe_json_read_from_text(item.pop('search_params_json', '{}'))
+                items.append(_json_safe(item))
+            return jsonify({'items': items, 'total': len(items)})
+
+        if request.method == 'POST':
+            payload = request.get_json(silent=True) or {}
+            name = str(payload.get('name') or '').strip()
+            search_params = payload.get('search_params')
+            if search_params is None:
+                search_params = {
+                    key: value for key, value in payload.items()
+                    if key not in ('name',)
+                }
+            if not name:
+                name = f"Search {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
+
+            search_params_json = json.dumps(_json_safe(search_params))
+            created_at = _utc_timestamp()
+            conn = get_db_connection()
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO saved_searches (name, search_params_json, created_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (name, search_params_json, created_at)
+                )
+                item_id = int(cursor.lastrowid)
+                total = int(conn.execute("SELECT COUNT(*) FROM saved_searches").fetchone()[0])
+                conn.commit()
+            finally:
+                conn.close()
+
+            return jsonify({
+                'item': {
+                    'id': item_id,
+                    'name': name,
+                    'search_params': _json_safe(search_params),
+                    'created_at': created_at
+                },
+                'total': total
+            })
+
+        payload = request.get_json(silent=True) or {}
+        item_id = request.args.get('id', type=int)
+        if item_id is None:
+            raw_id = payload.get('id')
+            item_id = int(raw_id) if raw_id not in (None, '') else None
+        if item_id is None:
+            return jsonify({'error': 'Saved search id is required for delete.'}), 400
+
+        conn = get_db_connection()
+        try:
+            conn.execute("DELETE FROM saved_searches WHERE id = ?", (int(item_id),))
+            total = int(conn.execute("SELECT COUNT(*) FROM saved_searches").fetchone()[0])
+            conn.commit()
+        finally:
+            conn.close()
+        return jsonify({'deleted_id': int(item_id), 'total': total})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/prediction_feedback', methods=['POST'])
+def prediction_feedback():
+    try:
+        payload = request.get_json(silent=True) or {}
+        input_payload = payload.get('input')
+        if input_payload is None:
+            input_payload = payload.get('input_json', {})
+        predicted_rent = float(payload.get('predicted_rent'))
+        actual_rent = float(payload.get('actual_rent'))
+        feedback_text = str(payload.get('feedback_text') or '').strip()
+        created_at = _utc_timestamp()
+
+        conn = get_db_connection()
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO prediction_feedback (input_json, predicted_rent, actual_rent, feedback_text, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    json.dumps(_json_safe(input_payload)),
+                    predicted_rent,
+                    actual_rent,
+                    feedback_text or None,
+                    created_at
+                )
+            )
+            feedback_id = int(cursor.lastrowid)
+            conn.commit()
+        finally:
+            conn.close()
+
+        return jsonify({
+            'feedback': {
+                'id': feedback_id,
+                'input': _json_safe(input_payload),
+                'predicted_rent': round(predicted_rent, 2),
+                'actual_rent': round(actual_rent, 2),
+                'feedback_text': feedback_text or None,
+                'created_at': created_at
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/predict', methods=['POST'])
 def predict_rent():
