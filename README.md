@@ -16,8 +16,8 @@ Rental decisions in metropolitan cities are difficult because users must balance
 ## Current Feature Set
 
 - Dashboard with city-level market statistics and charts.
-- Map exploration with listing clusters.
-- Rent Analytics flow with prediction, confidence range, market position, budget guidance, and locality recommendations.
+- Spatial Analysis map with livability heat zones, rent-band marker colors, popup listing details, and a category legend below the map.
+- Rent Analytics flow with Classic and Glass Cards modes, resizable input/result panes, prediction, confidence range, market position, budget guidance, and locality recommendations.
 - Trends and forecast view for short-term rent direction.
 - Compare Listings for side-by-side property review.
 - Locality Scorecard for ranked locality summaries.
@@ -25,6 +25,7 @@ Rental decisions in metropolitan cities are difficult because users must balance
 - Listing freshness and contact-type indicators.
 - Light and dark theme toggle.
 - Workplace map URL input that extracts coordinates instead of asking users for raw latitude and longitude.
+- Recommendation cards can jump directly to the exact in-app heat-map location before opening Google Maps.
 
 ## Architecture Snapshot
 
@@ -32,6 +33,13 @@ Rental decisions in metropolitan cities are difficult because users must balance
 - Backend: Python, Flask, Flask-CORS.
 - ML layer: scikit-learn Random Forest for rent prediction and K-Means for clustering.
 - Data layer: CSV-based rental dataset, model artifacts in `model_artifacts/`, and SQLite for local user actions.
+
+## Latest UX Updates
+
+- Added a dual-mode Rent Analytics workspace: `Classic` for a normal split layout and `Glass Cards` for large floating input cards.
+- Added a draggable divider between analytics inputs and prediction results so users can resize both sides.
+- Simplified recommendation-to-map flow so location actions focus the internal heat map first.
+- Reworked the map into clear livability categories with visible color meaning for both zones and rent markers.
 
 ## Repository Structure
 
