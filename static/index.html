@@ -92,9 +92,9 @@
             <section id="map-view" class="view-section">
                 <header>
                     <h1>Spatial Analysis</h1>
-                    <p class="subtitle">Clustering, livability bands, and color-coded rent markers</p>
+                    <p class="subtitle">Clustering, livability intensity, and budget-aware marker colors</p>
                     <p class="subtitle map-tip">
-                        Tip: Recommendation locations now jump to this heat map first. Click a colored marker to see listing details, and use the popup link only when you want the exact spot in Google Maps.
+                        Tip: Set a budget in Rent Analytics to recolor map markers by affordability. Recommendation locations jump to this heat map first, and the popup link opens Google Maps only when you need the exact external location.
                     </p>
                 </header>
                 <div class="map-container glass">
@@ -115,15 +115,18 @@
                         <p class="section-subtitle">1. Choose city, budget, BHK, and work city. 2. Click Predict Rent. 3. Review the recommended areas and total cost.</p>
                     </div>
                     <div class="analytics-mode-box">
-                        <div>
+                        <div class="analytics-mode-box-head">
+                            <div>
                             <h3>View mode</h3>
-                            <p class="section-subtitle">Classic keeps the usual layout and adds resize handles. Glass Cards splits the analytics inputs into clearer step cards.</p>
+                            <p class="section-subtitle">Classic is the regular workspace. Glass Cards uses a dark presentation layout with larger pop-up step cards.</p>
+                            </div>
+                            <span class="analytics-mode-badge">Presentation Ready</span>
                         </div>
                         <div class="analytics-mode-switch" role="group" aria-label="Analytics view mode">
                             <button class="mode-chip is-active" id="analytics-mode-classic-btn" data-analytics-mode="classic" type="button">Classic</button>
                             <button class="mode-chip" id="analytics-mode-glass-btn" data-analytics-mode="glass" type="button">Glass Cards</button>
                         </div>
-                        <div class="analytics-mode-status" id="analytics-mode-status">Classic layout active. Drag the divider between input and prediction to resize both sides.</div>
+                        <div class="analytics-mode-status" id="analytics-mode-status" role="status" aria-live="polite">Classic layout active. Drag the divider between input and prediction to resize both sides.</div>
                     </div>
                 </div>
                 <div class="predict-layout">

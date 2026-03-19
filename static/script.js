@@ -28,6 +28,11 @@ let costRefreshTimer = null;
 let map;
 let baseMapTileLayer = null;
 let mapMarkerIndex = new Map();
+let currentMapPoints = [];
+let mapHeatLayer = null;
+let mapZoneLayer = null;
+let mapMarkerLayer = null;
+let mapFocusMarker = null;
 
 const DEFAULT_COST_INPUTS = {
     deposit_months: 2,
@@ -53,15 +58,20 @@ const WORK_MAP_STATUS_DEFAULT = 'Paste a pinned map link and the app will read l
 const FALLBACK_API_BASES = ['http://127.0.0.1:5000', 'http://localhost:5000'];
 const DEFAULT_ANALYTICS_SPLITS = { classic: 42, glass: 58 };
 const MAP_LIVABILITY_BANDS = [
-    { key: 'needs-work', label: 'Needs work', min: 0, max: 4.4, color: '#ef4444', weight: 0.22, radius: 16 },
-    { key: 'balanced', label: 'Balanced', min: 4.5, max: 6.4, color: '#f59e0b', weight: 0.46, radius: 20 },
-    { key: 'strong-fit', label: 'Strong fit', min: 6.5, max: 7.9, color: '#22c55e', weight: 0.72, radius: 24 },
-    { key: 'premium-fit', label: 'Premium fit', min: 8.0, max: 10.0, color: '#06b6d4', weight: 1.0, radius: 28 }
+    { key: 'needs-work', label: 'Low intensity', min: 0, max: 4.4, color: '#ef4444', weight: 0.18, radius: 18 },
+    { key: 'balanced', label: 'Medium intensity', min: 4.5, max: 6.4, color: '#f59e0b', weight: 0.42, radius: 24 },
+    { key: 'strong-fit', label: 'High intensity', min: 6.5, max: 7.9, color: '#22c55e', weight: 0.7, radius: 30 },
+    { key: 'premium-fit', label: 'Peak intensity', min: 8.0, max: 10.0, color: '#06b6d4', weight: 1.0, radius: 36 }
 ];
 const MAP_RENT_BANDS = [
     { key: 'budget', label: 'Budget', max: 29999, color: '#6366f1' },
     { key: 'mid-range', label: 'Mid-range', max: 49999, color: '#f59e0b' },
     { key: 'premium', label: 'Premium', max: Infinity, color: '#ef4444' }
+];
+const MAP_BUDGET_FIT_BANDS = [
+    { key: 'budget-safe', label: 'Comfort fit', color: '#22c55e' },
+    { key: 'budget-stretch', label: 'Stretch fit', color: '#f59e0b' },
+    { key: 'budget-over', label: 'Over budget', color: '#ef4444' }
 ];
 let currentTheme = 'dark';
 let resolvedApiBase = null;
@@ -369,11 +379,19 @@ function updateAnalyticsModeStatus(mode = getCurrentAnalyticsMode()) {
 
     const ratio = currentAnalyticsSplits[mode] || DEFAULT_ANALYTICS_SPLITS[mode] || DEFAULT_ANALYTICS_SPLITS.classic;
     if (mode === 'glass') {
-        status.textContent = `Glass Cards active. The input cards lead the page with a shaded workspace, and the divider is set to ${Math.round(ratio)}% form width.`;
+        status.innerHTML = `
+            <span class="analytics-status-pill analytics-status-pill-glass">Glass active</span>
+            <strong>Dark pop-up cards are enabled.</strong>
+            <span>Large step cards lead the page and the divider is set to ${Math.round(ratio)}% form width.</span>
+        `;
         return;
     }
 
-    status.textContent = `Classic layout active. Drag the divider between input and prediction to resize both sides. Current form width: ${Math.round(ratio)}%.`;
+    status.innerHTML = `
+        <span class="analytics-status-pill analytics-status-pill-classic">Classic active</span>
+        <strong>Standard workspace with a resize handle.</strong>
+        <span>Drag the divider between input and prediction. Current form width: ${Math.round(ratio)}%.</span>
+    `;
 }
 
 function applyAnalyticsMode(mode, options = {}) {
@@ -581,6 +599,44 @@ function getMapRentBand(rent) {
     return MAP_RENT_BANDS.find((band) => safeRent <= band.max) || MAP_RENT_BANDS[MAP_RENT_BANDS.length - 1];
 }
 
+function getLiveBudgetTargetValue() {
+    const numeric = parseNumberOrNull(document.getElementById('budget_target')?.value);
+    return numeric !== null && numeric > 0 ? numeric : null;
+}
+
+function getMapBudgetFitBand(rent, budgetTarget) {
+    const safeRent = Number(rent) || 0;
+    const safeBudget = Number(budgetTarget) || 0;
+    if (!safeBudget) return MAP_BUDGET_FIT_BANDS[1];
+
+    if (safeRent <= safeBudget * 0.9) {
+        return MAP_BUDGET_FIT_BANDS[0];
+    }
+    if (safeRent <= safeBudget * 1.1) {
+        return MAP_BUDGET_FIT_BANDS[1];
+    }
+    return MAP_BUDGET_FIT_BANDS[2];
+}
+
+function getActiveMapMarkerBand(rent, budgetTarget = getLiveBudgetTargetValue()) {
+    return budgetTarget ? getMapBudgetFitBand(rent, budgetTarget) : getMapRentBand(rent);
+}
+
+function formatBudgetGap(rent, budgetTarget) {
+    const safeRent = Number(rent) || 0;
+    const safeBudget = Number(budgetTarget) || 0;
+    if (!safeBudget) return '';
+
+    const gap = safeRent - safeBudget;
+    if (Math.abs(gap) <= safeBudget * 0.03) {
+        return 'Near your budget target';
+    }
+    if (gap < 0) {
+        return `${formatCurrency(Math.abs(gap))} under target`;
+    }
+    return `${formatCurrency(gap)} above target`;
+}
+
 function formatMapLivabilityRange(band) {
     return `${band.min.toFixed(1)} - ${band.max.toFixed(1)} / 10`;
 }
@@ -598,7 +654,7 @@ function formatMapRentRange(band, index) {
     return `${formatCurrency(start)} - ${formatCurrency(band.max)}`;
 }
 
-function renderMapCategoryLegend(points = []) {
+function renderMapCategoryLegend(points = [], budgetTarget = getLiveBudgetTargetValue()) {
     const panel = document.getElementById('map-category-legend');
     if (!panel) return;
 
@@ -616,30 +672,35 @@ function renderMapCategoryLegend(points = []) {
     }
 
     const livabilityCounts = MAP_LIVABILITY_BANDS.map((band) => ({ ...band, count: 0 }));
-    const rentCounts = MAP_RENT_BANDS.map((band) => ({ ...band, count: 0 }));
+    const markerBands = (budgetTarget ? MAP_BUDGET_FIT_BANDS : MAP_RENT_BANDS).map((band) => ({ ...band, count: 0 }));
 
     points.forEach((point) => {
         const livabilityBand = getMapLivabilityBand(point.Neighborhood_Livability_Score);
-        const rentBand = getMapRentBand(point.Rent);
+        const markerBand = getActiveMapMarkerBand(point.Rent, budgetTarget);
         const livabilityTarget = livabilityCounts.find((band) => band.key === livabilityBand.key);
-        const rentTarget = rentCounts.find((band) => band.key === rentBand.key);
+        const markerTarget = markerBands.find((band) => band.key === markerBand.key);
         if (livabilityTarget) livabilityTarget.count += 1;
-        if (rentTarget) rentTarget.count += 1;
+        if (markerTarget) markerTarget.count += 1;
     });
 
     panel.innerHTML = `
         <div class="map-info-header">
             <div>
                 <h3>How the map is categorized</h3>
-                <p class="section-subtitle">Heat zones use livability score bands. Marker colors use monthly rent bands.</p>
+                <p class="section-subtitle">Glow intensity increases with livability. Marker colors switch to budget-fit mode when a budget target is set in Rent Analytics.</p>
             </div>
-            <div class="map-info-summary">${totalPoints} mapped locations</div>
+            <div class="map-info-summary-stack">
+                <div class="map-info-summary">${totalPoints} mapped locations</div>
+                <div class="map-info-summary ${budgetTarget ? 'is-budget-active' : 'is-budget-waiting'}">
+                    ${budgetTarget ? `Budget target ${formatCurrency(budgetTarget)} active` : 'Set a budget to enable affordability colors'}
+                </div>
+            </div>
         </div>
         <div class="map-legend-grid">
             <section class="map-legend-section">
                 <div class="map-legend-section-head">
-                    <h4>Heat Zones</h4>
-                    <p>Areas are grouped by neighborhood livability.</p>
+                    <h4>Heat Intensity</h4>
+                    <p>Higher livability creates stronger glow and a larger colored zone.</p>
                 </div>
                 ${livabilityCounts.map((band) => `
                     <div class="map-legend-item">
@@ -654,30 +715,37 @@ function renderMapCategoryLegend(points = []) {
             </section>
             <section class="map-legend-section">
                 <div class="map-legend-section-head">
-                    <h4>Marker Colors</h4>
-                    <p>Dots show the rent band of each listing point.</p>
+                    <h4>${budgetTarget ? 'Budget Fit Markers' : 'Rent Range Markers'}</h4>
+                    <p>${budgetTarget ? 'Dots compare each listing rent against the current budget target.' : 'Dots show the rent band of each listing point until a budget target is set.'}</p>
                 </div>
-                ${rentCounts.map((band, index) => `
+                ${markerBands.map((band, index) => `
                     <div class="map-legend-item">
                         <span class="map-legend-swatch map-tone-${band.key}"></span>
                         <div class="map-legend-copy">
                             <strong>${escapeHtml(band.label)}</strong>
-                            <span>${escapeHtml(formatMapRentRange(band, index))}</span>
+                            <span>${escapeHtml(budgetTarget
+                                ? (band.key === 'budget-safe'
+                                    ? 'At least 10% below the current budget'
+                                    : band.key === 'budget-stretch'
+                                        ? 'Within about 10% of the current budget'
+                                        : 'More than 10% above the current budget')
+                                : formatMapRentRange(band, index))}</span>
                         </div>
                         <span class="map-legend-count">${band.count} listings</span>
                     </div>
                 `).join('')}
             </section>
         </div>
-        <div class="map-legend-note">Selecting a location from recommendations now jumps this heat map to that exact point and opens its details.</div>
+        <div class="map-legend-note">Selecting a location from recommendations jumps this heat map to that exact point first. The external Google Maps link is now secondary.</div>
     `;
 }
 
-function buildMapPopupContent(point, livabilityBand, rentBand) {
+function buildMapPopupContent(point, livabilityBand, markerBand, budgetTarget = getLiveBudgetTargetValue()) {
     const locationName = safeText(point['Area Locality']) || safeText(point.City) || 'Unknown Location';
     const city = safeText(point.City) || 'Unknown city';
     const rent = Number(point.Rent) || 0;
     const livabilityScore = parseNumberOrNull(point.Neighborhood_Livability_Score);
+    const budgetGap = formatBudgetGap(rent, budgetTarget);
     const metaItems = [
         point.BHK ? `<span>${escapeHtml(safeText(point.BHK))} BHK</span>` : '',
         point.Size ? `<span>${escapeHtml(safeText(point.Size))} sqft</span>` : '',
@@ -696,8 +764,9 @@ function buildMapPopupContent(point, livabilityBand, rentBand) {
                 <div class="map-popup-rent">${formatCurrency(rent)}</div>
             </div>
             <div class="map-popup-badges">
-                <span class="map-popup-badge map-tone-${rentBand.key}">${escapeHtml(rentBand.label)} rent</span>
+                <span class="map-popup-badge map-tone-${markerBand.key}">${escapeHtml(markerBand.label)}${budgetTarget ? '' : ' rent'}</span>
                 <span class="map-popup-badge map-tone-${livabilityBand.key}">${escapeHtml(livabilityBand.label)} livability</span>
+                ${budgetGap ? `<span class="map-popup-badge">${escapeHtml(budgetGap)}</span>` : ''}
                 ${point.Cluster_ID !== undefined && point.Cluster_ID !== null ? `<span class="map-popup-badge">Cluster ${escapeHtml(safeText(point.Cluster_ID))}</span>` : ''}
             </div>
             ${metaItems ? `<div class="map-popup-meta">${metaItems}</div>` : ''}
@@ -714,6 +783,123 @@ function buildMapPopupContent(point, livabilityBand, rentBand) {
             <a class="map-popup-link" href="${gmapsUrl}" target="_blank" rel="noopener noreferrer">Open exact location in Google Maps</a>
         </div>
     `;
+}
+
+function clearMapFocusMarker() {
+    if (!map || !mapFocusMarker) return;
+    map.removeLayer(mapFocusMarker);
+    mapFocusMarker = null;
+}
+
+function renderMapVisualization(points = currentMapPoints) {
+    if (!map) return;
+
+    currentMapPoints = Array.isArray(points) ? points : [];
+    const budgetTarget = getLiveBudgetTargetValue();
+    renderMapCategoryLegend(currentMapPoints, budgetTarget);
+    mapMarkerIndex = new Map();
+    clearMapFocusMarker();
+
+    if (mapHeatLayer) {
+        map.removeLayer(mapHeatLayer);
+        mapHeatLayer = null;
+    }
+    if (mapZoneLayer) {
+        map.removeLayer(mapZoneLayer);
+        mapZoneLayer = null;
+    }
+    if (mapMarkerLayer) {
+        map.removeLayer(mapMarkerLayer);
+        mapMarkerLayer = null;
+    }
+
+    if (!currentMapPoints.length) return;
+
+    mapZoneLayer = L.layerGroup().addTo(map);
+    mapMarkerLayer = L.layerGroup().addTo(map);
+
+    const heatGradient = MAP_LIVABILITY_BANDS.reduce((accumulator, band, index) => {
+        accumulator[index === 0 ? 0.1 : band.weight] = band.color;
+        return accumulator;
+    }, {});
+
+    if (L.heatLayer) {
+        const heatPoints = currentMapPoints.map((point) => {
+            const numericScore = Number(point.Neighborhood_Livability_Score);
+            const normalizedScore = Number.isFinite(numericScore) ? Math.max(0.14, Math.min(1, numericScore / 10)) : 0.18;
+            return [Number(point.Latitude), Number(point.Longitude), normalizedScore];
+        });
+
+        mapHeatLayer = L.heatLayer(heatPoints, {
+            radius: 34,
+            blur: 26,
+            maxZoom: 17,
+            minOpacity: 0.32,
+            gradient: heatGradient,
+            pane: 'heatmapPane'
+        }).addTo(map);
+    }
+
+    currentMapPoints.forEach((point) => {
+        const livabilityBand = getMapLivabilityBand(point.Neighborhood_Livability_Score);
+        const markerBand = getActiveMapMarkerBand(point.Rent, budgetTarget);
+        const lat = Number(point.Latitude);
+        const lon = Number(point.Longitude);
+        const locationName = safeText(point['Area Locality']) || safeText(point.City) || 'Unknown Location';
+        const rent = Number(point.Rent) || 0;
+        const numericScore = Number(point.Neighborhood_Livability_Score);
+        const zoneOpacity = Number.isFinite(numericScore) ? Math.max(0.16, Math.min(0.3, numericScore / 36)) : 0.16;
+
+        L.circleMarker([lat, lon], {
+            radius: livabilityBand.radius,
+            fillColor: livabilityBand.color,
+            color: livabilityBand.color,
+            weight: 1,
+            fillOpacity: zoneOpacity,
+            opacity: 0.34,
+            pane: 'zonePane',
+            interactive: false
+        }).addTo(mapZoneLayer);
+
+        const marker = L.circleMarker([lat, lon], {
+            radius: budgetTarget ? 7 : 6,
+            fillColor: markerBand.color,
+            color: '#ffffff',
+            weight: 1.8,
+            fillOpacity: 0.92,
+            className: 'marker-point',
+            pane: 'markerPane',
+            zIndexOffset: 500
+        });
+
+        marker.bindPopup(buildMapPopupContent(point, livabilityBand, markerBand, budgetTarget));
+        marker.bindTooltip(
+            `<div class="map-tooltip-label"><strong>${escapeHtml(locationName)}</strong><span>${formatCurrency(rent)}</span></div>`,
+            {
+                permanent: false,
+                direction: 'top',
+                offset: [0, -10],
+                className: 'map-label'
+            }
+        );
+
+        marker.on('click', (event) => {
+            if (event.originalEvent) {
+                event.originalEvent.preventDefault();
+                event.originalEvent.stopPropagation();
+            }
+            marker.openPopup();
+        });
+
+        marker.addTo(mapMarkerLayer);
+        if (marker.bringToFront) marker.bringToFront();
+        mapMarkerIndex.set(buildMapLocationKey(lat, lon), marker);
+    });
+}
+
+function refreshMapVisualization() {
+    if (!map || !currentMapPoints.length) return;
+    renderMapVisualization(currentMapPoints);
 }
 
 function focusMapLocation(lat, lon, options = {}) {
@@ -735,8 +921,38 @@ function focusMapLocation(lat, lon, options = {}) {
 
         const marker = mapMarkerIndex.get(locationKey);
         if (marker) {
+            clearMapFocusMarker();
             window.setTimeout(() => marker.openPopup(), 240);
+            return;
         }
+
+        clearMapFocusMarker();
+        mapFocusMarker = L.circleMarker([numericLat, numericLon], {
+            radius: 11,
+            fillColor: '#ffffff',
+            color: '#38bdf8',
+            weight: 3,
+            fillOpacity: 0.22,
+            pane: 'markerPane'
+        }).addTo(map);
+        mapFocusMarker.bindPopup(`
+            <div class="map-popup-card">
+                <div class="map-popup-head">
+                    <div>
+                        <div class="map-popup-title">Focused recommendation location</div>
+                        <div class="map-popup-subtitle">This point came from the recommendation card.</div>
+                    </div>
+                </div>
+                <div class="map-popup-grid">
+                    <div class="map-popup-stat">
+                        <span>Coordinates</span>
+                        <strong>${numericLat.toFixed(4)}, ${numericLon.toFixed(4)}</strong>
+                    </div>
+                </div>
+                <a class="map-popup-link" href="https://www.google.com/maps?q=${numericLat},${numericLon}" target="_blank" rel="noopener noreferrer">Open exact location in Google Maps</a>
+            </div>
+        `);
+        window.setTimeout(() => mapFocusMarker?.openPopup(), 240);
     }, 120);
 }
 
@@ -871,6 +1087,7 @@ async function loadStats() {
 async function initMap() {
     map = L.map('map').setView([22.3511, 78.6677], 5);
     mapMarkerIndex = new Map();
+    currentMapPoints = [];
 
     map.on('click', (e) => {
         const { lat, lng } = e.latlng;
@@ -892,85 +1109,10 @@ async function initMap() {
     try {
         const res = await apiFetch('/api/map_data');
         const data = await res.json();
-        const points = Array.isArray(data) ? data.filter((point) => (
+        currentMapPoints = Array.isArray(data) ? data.filter((point) => (
             Number.isFinite(Number(point.Latitude)) && Number.isFinite(Number(point.Longitude))
         )) : [];
-
-        renderMapCategoryLegend(points);
-        const heatPoints = points.map((point) => {
-            const band = getMapLivabilityBand(point.Neighborhood_Livability_Score);
-            return [Number(point.Latitude), Number(point.Longitude), band.weight];
-        });
-
-        if (L.heatLayer) {
-            L.heatLayer(heatPoints, {
-                radius: 30,
-                blur: 22,
-                maxZoom: 17,
-                minOpacity: 0.24,
-                gradient: {
-                    0.12: MAP_LIVABILITY_BANDS[0].color,
-                    [MAP_LIVABILITY_BANDS[1].weight]: MAP_LIVABILITY_BANDS[1].color,
-                    [MAP_LIVABILITY_BANDS[2].weight]: MAP_LIVABILITY_BANDS[2].color,
-                    [MAP_LIVABILITY_BANDS[3].weight]: MAP_LIVABILITY_BANDS[3].color
-                },
-                pane: 'heatmapPane'
-            }).addTo(map);
-        }
-
-        points.forEach((point) => {
-            const livabilityBand = getMapLivabilityBand(point.Neighborhood_Livability_Score);
-            const rentBand = getMapRentBand(point.Rent);
-            const lat = Number(point.Latitude);
-            const lon = Number(point.Longitude);
-            const locationName = safeText(point['Area Locality']) || safeText(point.City) || 'Unknown Location';
-            const rent = Number(point.Rent) || 0;
-
-            L.circleMarker([lat, lon], {
-                radius: livabilityBand.radius,
-                fillColor: livabilityBand.color,
-                color: livabilityBand.color,
-                weight: 1,
-                fillOpacity: 0.14,
-                opacity: 0.28,
-                pane: 'zonePane',
-                interactive: false
-            }).addTo(map);
-
-            const marker = L.circleMarker([lat, lon], {
-                radius: 6,
-                fillColor: rentBand.color,
-                color: '#fff',
-                weight: 1.5,
-                fillOpacity: 0.88,
-                className: 'marker-point',
-                pane: 'markerPane',
-                zIndexOffset: 500
-            });
-
-            marker.bindPopup(buildMapPopupContent(point, livabilityBand, rentBand));
-            marker.bindTooltip(
-                `<div class="map-tooltip-label"><strong>${escapeHtml(locationName)}</strong><span>${formatCurrency(rent)}</span></div>`,
-                {
-                    permanent: false,
-                    direction: 'top',
-                    offset: [0, -10],
-                    className: 'map-label'
-                }
-            );
-
-            marker.on('click', (event) => {
-                if (event.originalEvent) {
-                    event.originalEvent.preventDefault();
-                    event.originalEvent.stopPropagation();
-                }
-                marker.openPopup();
-            });
-
-            marker.addTo(map);
-            if (marker.bringToFront) marker.bringToFront();
-            mapMarkerIndex.set(buildMapLocationKey(lat, lon), marker);
-        });
+        renderMapVisualization(currentMapPoints);
     } catch (err) {
         console.error("Map data error", err);
         renderMapCategoryLegend();
@@ -1518,8 +1660,14 @@ function initRentAnalyticsControls() {
     ['budget_target', 'has_pet', 'work_city', 'tenant'].forEach((id) => {
         const input = document.getElementById(id);
         if (!input) return;
-        input.addEventListener('input', () => scheduleRecommendationRefresh());
-        input.addEventListener('change', () => scheduleRecommendationRefresh());
+        input.addEventListener('input', () => {
+            scheduleRecommendationRefresh();
+            if (id === 'budget_target') refreshMapVisualization();
+        });
+        input.addEventListener('change', () => {
+            scheduleRecommendationRefresh();
+            if (id === 'budget_target') refreshMapVisualization();
+        });
     });
 
     const workMapUrlInput = document.getElementById('work_map_url');
@@ -1670,6 +1818,7 @@ function resetAnalyticsForm() {
     refreshSavedSearchNameSuggestions();
     setWorkMapStatus();
     ensureCompareHelperText(undefined, true);
+    refreshMapVisualization();
 }
 
 function renderDecisionOverview() {
@@ -2715,6 +2864,7 @@ function applySavedSearch(searchParams) {
 
     syncLinkedSectionsFromCurrentPlan({ forceCompare: true });
     refreshSavedSearchNameSuggestions();
+    refreshMapVisualization();
     showSection('predict');
 }
 
