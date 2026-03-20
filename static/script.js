@@ -381,8 +381,8 @@ function updateAnalyticsModeStatus(mode = getCurrentAnalyticsMode()) {
     if (mode === 'glass') {
         status.innerHTML = `
             <span class="analytics-status-pill analytics-status-pill-glass">Glass active</span>
-            <strong>Dark pop-up cards are enabled.</strong>
-            <span>Large step cards lead the page and the divider is set to ${Math.round(ratio)}% form width.</span>
+            <strong>Floating presentation cards are enabled.</strong>
+            <span>Glass mode separates the form and results into elevated cards. Current form width: ${Math.round(ratio)}%.</span>
         `;
         return;
     }
@@ -390,7 +390,7 @@ function updateAnalyticsModeStatus(mode = getCurrentAnalyticsMode()) {
     status.innerHTML = `
         <span class="analytics-status-pill analytics-status-pill-classic">Classic active</span>
         <strong>Standard workspace with a resize handle.</strong>
-        <span>Drag the divider between input and prediction. Current form width: ${Math.round(ratio)}%.</span>
+        <span>Use the regular workspace layout and resize the split as needed. Current form width: ${Math.round(ratio)}%.</span>
     `;
 }
 
